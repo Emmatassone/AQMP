@@ -13,7 +13,7 @@ def code(input_file, output_file, max_error, bi, callback=None, ssim_stop=False,
     im = im.convert('YCbCr')
     w, h = im.size
     depth = mode_to_bpp(im.mode) // 8
-    raw_size = w * h * depth1
+    raw_size = w * h * depth
 
     print(f"Image Mode: {im.mode}, Depth: {depth}, Width: {w}, Height: {h}")
 
