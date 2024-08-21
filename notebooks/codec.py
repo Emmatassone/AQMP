@@ -141,11 +141,9 @@ def read_vector(f, v_fmt):
     quantize_inv(x, v_fmt)
     return x
 
-def _omp_decode(f, image_data, bi, n, min_n, max_n):
+def _omp_decode(f, image_data, bi, n, min_n, max_n, v_fmt):
     """OMP decoder for the entire image"""
     A = DCT1_Haar1_qt(n * n, a_cols)
-
-    v_fmt = v_fmt_precision
 
     # Read the vector x from the file
     x = np.array(read_vector(f, v_fmt))
@@ -179,7 +177,7 @@ def decode(input_file, output_file):
 
         # Process image for each channel
         for k in range(depth):
-            image_data = _omp_decode(f, image_data[:, :, k], bi, max_n, min_n, max_n)
+            image_data = _omp_decode(f, image_data[:, :, k], bi, max_n, min_n, max_n, v_fmt_precision)
 
         if depth == 1:
             image_data[:, :, 1] = image_data[:, :, 0]
