@@ -62,7 +62,7 @@ def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_s
     
     x_list.append((N, x))
     processed_blocks = 1
-    return processed_blocks
+    return processed_blocks, x_list
 
 def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
     """Compress input_file with the given parameters into output_file"""
@@ -93,16 +93,15 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
         omp_d = {}
         n = min_n
         while n <= max_n:
-            A = DCT1_Haar1_qt(n * n, a_cols)
             print(f"Initializing omp_d[{n}] with matrix A of shape {A.shape}")
+            A = DCT1_Haar1_qt(n * n, a_cols)
             omp_d[n] = A
             n *= 2
 
         x_list = []
-
         # Process each color channel of the entire image
         for k in range(depth): 
-            n0 = _omp_code(x_list, im_data[:, :, k], None, omp_d, max_error, bi, 
+            n0, x_list = _omp_code(x_list, im_data[:, :, k], None, omp_d, max_error, bi, 
                            max_n, k, stats, ssim_stop, min_n, max_n, callback)
             n0_cumu += n0
 
@@ -258,23 +257,19 @@ def get_progress(stats, im_data, min_n):
     processed_blocks = sum(stats.values())
     return processed_blocks, total_blocks
 
-def psi(x):
-	if 0 <= x < 0.5:
-		return 1
-	if 0.5 <= x < 1:
-		return -1
-	return 0
+### Haar basis ###
 
 def phi(x):
 	if 0 <= x < 1:
 		return 1
 	return 0
 
-def DCT_II_f(k, N):
-    """Discrete Cosine Transform Type II"""
-    def f(x):
-        return np.cos(pi * (x + 0.5) * k / N)
-    return f
+def psi(x):
+	if 0 <= x < 0.5:
+		return 1
+	if 0.5 <= x < 1:
+		return -1
+	return 0
 
 def h(i, N):
     """Generate the h function for the Haar basis."""
@@ -288,9 +283,35 @@ def v(h, N):
     """Generate the v vector for the Haar basis."""
     return [h(i / float(N)) for i in range(N)]
 
+def Haar1_qt(rows, cols):
+    """Generate the Haar basis matrix."""
+    return np.array([v(h(i, cols), rows) for i in range(cols)]).T
+
+### DCT basis ###
+
+def DCT_II_f(k, N):
+    """Discrete Cosine Transform Type II"""
+    def f(x):
+        return np.cos(pi * (x + 0.5) * k / N)
+    return f
+
 def w(k, N):
 	c = sqrt(2) ** sign(k)
 	return  [ c * DCT_II_f(k, N)(i / float(N)) for i in range(N) ]
+
+def DCT1_qt(rows, cols):
+    """Generate the DCT basis matrix."""
+    return np.array([w(k, rows) for k in range(cols)]).T
+
+### Combine DCT and Haar ###
+
+def DCT1_Haar1_qt(rows, cols):
+    """Combine DCT and Haar basis matrices."""
+    dct_matrix = DCT1_qt(rows, cols // 2)
+    haar_matrix = Haar1_qt(rows, cols // 2)
+    return np.concatenate((dct_matrix, haar_matrix), axis=1)
+
+###
 
 def W(k1, k2, n, N):
     """Generate the W matrix for the basis."""
@@ -307,17 +328,3 @@ def W(k1, k2, n, N):
         return g(k1, k2, 8, 8, np.dot(ro(theta(n, N)), [[i / 8.0], [j / 8.0]]))
 
     return [[W_elem(i, j) for j in range(8)] for i in range(8)]
-
-def DCT1_qt(rows, cols):
-    """Generate the DCT basis matrix."""
-    return np.array([w(k, rows) for k in range(cols)]).T
-
-def Haar1_qt(rows, cols):
-    """Generate the Haar basis matrix."""
-    return np.array([v(h(i, cols), rows) for i in range(cols)]).T
-
-def DCT1_Haar1_qt(rows, cols):
-    """Combine DCT and Haar basis matrices."""
-    dct_matrix = DCT1_qt(rows, cols // 2)
-    haar_matrix = Haar1_qt(rows, cols // 2)
-    return np.concatenate((dct_matrix, haar_matrix), axis=1)
