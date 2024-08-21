@@ -26,25 +26,26 @@ def truncate(value, format_spec):
     except ValueError as e:
         raise ValueError(f"Invalid format code '{format_spec}' for value '{value}'") from e
 
-def quantize(x, v_fmt):
-    for i in range(len(x)):
-        x[i] = truncate(x[i], v_fmt)
-
-def write_vector_as_pairs(f, x, n0, v_fmt):
+def write_vector_as_pairs(f, x, norm_0_x, v_fmt):
     """Write a sparse vector as a list of pairs (pos, value)"""
-    f.write("B", int(n0))
+    f.write("B", int(norm_0_x))
     pos_fmt = "B" if len(x) <= 256 else "H"
-    if n0 > 0:
+    if norm_0_x > 0:
         for i, value in enumerate(x):
             if value != 0:
                 f.write(pos_fmt, i)
                 quantized_value = truncate(value, v_fmt)
-                f.write("f", float(quantized_value))     
+                f.write("f", float(quantized_value)) 
 
+def quantize(x, v_fmt):
+    for elem in x:
+        elem = truncate(elem, v_fmt)
+    return x
+        
 def write_vector(f, x, v_fmt):
-    quantize(x, v_fmt)
-    n0 = np.linalg.norm(x, 0)
-    write_vector_as_pairs(f, x, n0, v_fmt)
+    x = quantize(x, v_fmt)
+    norm_0_x = np.linalg.norm(x, 0)
+    write_vector_as_pairs(f, x, norm_0_x, v_fmt)
 
 def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
     b = im_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
@@ -54,9 +55,9 @@ def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_s
 
     if A.shape[1] > b.size:
         A = A[:, :b.size]
+    print(f"A.shape: {A.shape}, b.shape{b.shape}")
     
     # Perform OMP on the entire image
-    print(A.shape, b.shape)
     omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(A.shape[1], b.size))
     omp.fit(A, b)
     x = omp.coef_
@@ -150,8 +151,8 @@ def _omp_decode(f, im_data, bi, N, minN, maxN):
     # Compute the output vector b = A * x
     b = np.dot(A, x)
 
-    for l in range(len(b)):
-        b[l] = truncate(b[l], "B")
+    for elem in b:
+        elem = truncate(elem, "B")
 
     # Reconstruct the image data ( c_inv still not defined. Found in biyections.py)
     im_data[:, :] = c_inv[bi](b, N).reshape(im_data.shape)
