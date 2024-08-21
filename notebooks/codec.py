@@ -17,7 +17,7 @@ magic_number = b'FIF'  # Ensure this is a bytes object
 header_fmt = '3sBiiBBBBB'
 v_fmt_precision = ".2f"  # Use this for floating-point precision formatting
 
-## encoder ##
+### encoder ###
 
 def truncate(value, format_spec):
     """Truncate the value to the specified format."""
@@ -50,6 +50,7 @@ def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_s
     b = im_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
 
     A = omp_d.get(N)
+    print(f"A = {A}")
 
     if A.shape[1] > b.size:
         A = A[:, :b.size]
@@ -93,8 +94,8 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
         omp_d = {}
         n = min_n
         while n <= max_n:
-            print(f"Initializing omp_d[{n}] with matrix A of shape {A.shape}")
             A = DCT1_Haar1_qt(n * n, a_cols)
+            print(f"Initializing omp_d[{n}] with matrix A of shape {A.shape}")
             omp_d[n] = A
             n *= 2
 
@@ -115,7 +116,7 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
 
     return output_file, bytes_written, raw_size, n0_cumu
 
-## decoder ##
+### decoder ###
 
 def read_vector_as_pairs(f, v_fmt):
 	"""Read an sparse vector as a list of pairs (pos, value)"""
@@ -184,7 +185,7 @@ def decode(input_file, output_file):
         im = Image.fromarray(im_data.astype('uint8'))
         im.save(output_file)
 
-##
+###
 
 def YCbCr_to_RGB(im_data):
     """Convert YCbCr to RGB."""
