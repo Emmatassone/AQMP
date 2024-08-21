@@ -1,13 +1,13 @@
 import numpy as np
 from numpy import array, concatenate, sign
 import io
-from rawfile import RawFile
+from PIL import Image
+from struct import pack, unpack, calcsize
 from math import pi, cos, sin, log, sqrt
 from sklearn.linear_model import OrthogonalMatchingPursuit
 from scipy.sparse import csc_matrix
-from struct import pack, unpack, calcsize
 import zlib
-from PIL import Image
+from rawfile import RawFile
 
 min_n = 8
 max_n = 32
@@ -45,11 +45,11 @@ def write_vector(f, x, v_fmt):
                 f.write(position_fmt, i)
                 f.write("f", float(truncate(value, v_fmt)))
 
-def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
+def _omp_code(x_list, image_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
     """ Process channel of image using Matching Pursuit. """
     """ The vector of coefficients 'x' is computed. """
 
-    b = im_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
+    b = image_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
 
     A = omp_d.get(N)
     print(f"A = {A}")
@@ -183,35 +183,35 @@ def decode(input_file, output_file):
             image_data[:, :, 1] = image_data[:, :, 0]
             image_data[:, :, 2] = image_data[:, :, 0]
 
-        image_data = YCbCr_to_RGB(im_data)
+        image_data = YCbCr_to_RGB(image_data)
 
         image = Image.fromarray(image_data.astype('uint8'))
         image.save(output_file)
 
 ###
 
-def YCbCr_to_RGB(im_data):
+def YCbCr_to_RGB(image_data):
     """Convert YCbCr to RGB."""
-    Y = im_data[:, :, 0]
-    Cb = im_data[:, :, 1] - 128
-    Cr = im_data[:, :, 2] - 128
+    Y = image_data[:, :, 0]
+    Cb = image_data[:, :, 1] - 128
+    Cr = image_data[:, :, 2] - 128
 
     R = Y + 1.402 * Cr
     G = Y - 0.344136 * Cb - 0.714136 * Cr
     B = Y + 1.772 * Cb
 
-    im_data[:, :, 0] = np.clip(R, 0, 255)
-    im_data[:, :, 1] = np.clip(G, 0, 255)
-    im_data[:, :, 2] = np.clip(B, 0, 255)
+    image_data[:, :, 0] = np.clip(R, 0, 255)
+    image_data[:, :, 1] = np.clip(G, 0, 255)
+    image_data[:, :, 2] = np.clip(B, 0, 255)
     
-    return im_data
+    return image_data
     
-def sub_image(im_data, n, i, j, k):
+def sub_image(image_data, n, i, j, k):
     """
     Extracts a sub-image from a larger image array.
 
     Parameters:
-    - im_data: The full image data as a NumPy array.
+    - image_data: The full image data as a NumPy array.
     - n: The size of the block.
     - i, j: The starting indices for the block.
     - k: The channel index.
@@ -220,21 +220,21 @@ def sub_image(im_data, n, i, j, k):
     - The extracted sub-image as a NumPy array.
     """
     h0, h1, w0, w1 = i, i + n, j, j + n
-    return im_data[h0:h1, w0:w1, k]
+    return image_data[h0:h1, w0:w1, k]
 
-def set_sub_image(sub_img, im_data, n, i, j, k):
+def set_sub_image(sub_img, image_data, n, i, j, k):
     """
     Places a sub-image back into the larger image array.
 
     Parameters:
     - sub_img: The sub-image to be placed back.
-    - im_data: The full image data as a NumPy array.
+    - image_data: The full image data as a NumPy array.
     - n: The size of the block.
     - i, j: The starting indices for the block.
     - k: The channel index.
     """
     h0, h1, w0, w1 = i, i + n, j, j + n
-    im_data[h0:h1, w0:w1, k] = sub_img
+    image_data[h0:h1, w0:w1, k] = sub_img
 
 def mode_to_bpp(mode):
     """Convert image mode to bits per pixel."""
@@ -257,9 +257,9 @@ def print_progress(message, processed, total):
     """Print progress message."""
     print(message % (processed, total))
 
-def get_progress(stats, im_data, min_n):
+def get_progress(stats, image_data, min_n):
     """Get progress information for print."""
-    total_blocks = (im_data.shape[0] // min_n) * (im_data.shape[1] // min_n)
+    total_blocks = (image_data.shape[0] // min_n) * (image_data.shape[1] // min_n)
     processed_blocks = sum(stats.values())
     return processed_blocks, total_blocks
 
