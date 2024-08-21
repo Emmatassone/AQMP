@@ -25,27 +25,25 @@ def truncate(value, format_spec):
         return float(f"{value:{format_spec}}")
     except ValueError as e:
         raise ValueError(f"Invalid format code '{format_spec}' for value '{value}'") from e
-
-def write_vector_as_pairs(f, x, norm_0_x, v_fmt):
-    """Write a sparse vector as a list of pairs (pos, value)"""
-    f.write("B", int(norm_0_x))
-    pos_fmt = "B" if len(x) <= 256 else "H"
-    if norm_0_x > 0:
-        for i, value in enumerate(x):
-            if value != 0:
-                f.write(pos_fmt, i)
-                quantized_value = truncate(value, v_fmt)
-                f.write("f", float(quantized_value)) 
-
+        
 def quantize(x, v_fmt):
+    """Truncate elements of x using v_fmt"""
     for elem in x:
         elem = truncate(elem, v_fmt)
     return x
-        
+
 def write_vector(f, x, v_fmt):
+    """Write a sparse vector as a list of pairs (pos, value)"""
     x = quantize(x, v_fmt)
-    norm_0_x = np.linalg.norm(x, 0)
-    write_vector_as_pairs(f, x, norm_0_x, v_fmt)
+    x_norm_0 = np.linalg.norm(x, 0)
+    f.write("B", int(x_norm_0))
+
+    position_fmt = "B" if len(x) <= 256 else "H"
+    if x_norm_0 > 0:
+        for i, value in enumerate(x):
+            if value != 0:
+                f.write(position_fmt, i)
+                f.write("f", float(truncate(value, v_fmt)))
 
 def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
     b = im_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
