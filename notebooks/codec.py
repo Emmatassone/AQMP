@@ -46,6 +46,9 @@ def write_vector(f, x, v_fmt):
                 f.write("f", float(truncate(value, v_fmt)))
 
 def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
+    """ Process channel of image using Matching Pursuit. """
+    """ The vector of coefficients 'x' is computed. """
+
     b = im_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
 
     A = omp_d.get(N)
@@ -112,6 +115,7 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
             write_vector(f, x.tolist(), v_fmt)
 
         bytes_written = f.tell()
+        print(f"bytes_written: {bytes_written}")
 
     return output_file, bytes_written, raw_size, n0_cumu
 
@@ -119,7 +123,6 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
 
 def read_vector_as_pairs(f, v_fmt):
 	"""Read an sparse vector as a list of pairs (pos, value)"""
-
 	x = np.zeros(len(v_fmt))
 	n0 = f.read("B")
 	pos_fmt = "B" if len(v_fmt) <= 256 else "H"
@@ -129,7 +132,7 @@ def read_vector_as_pairs(f, v_fmt):
 		value = f.read(v_fmt[pos])
 		x[pos] = float(value)
 	return x
-    
+
 def read_vector(f, v_fmt):
     """Read vector from file f with format v_fmt"""
     x = read_vector_as_pairs(f, v_fmt)
@@ -138,7 +141,6 @@ def read_vector(f, v_fmt):
 
 def _omp_decode(f, im_data, bi, N, minN, maxN):
     """OMP decoder for the entire image"""
-
     A = DCT1_Haar1_qt(N * N, a_cols)
 
     v_fmt = v_fmt_precision
@@ -157,7 +159,6 @@ def _omp_decode(f, im_data, bi, N, minN, maxN):
 
 def decode(input_file, output_file):
     """Decompress input_file into output_file"""
-
     with RawFile(input_file, 'rb') as f:
         #Chequear porque me parece no recuerdo  A_id, bi, minN, maxN si los guardé con el encoder.
         #En particular, la variable  A_id la borré de todo el código
