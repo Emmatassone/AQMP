@@ -12,10 +12,10 @@ from rawfile import RawFile
 min_n = 8
 max_n = 32
 a_cols = 256
-fif_ver = 2
+fif_version = 2
 magic_number = b'FIF'  # Ensure this is a bytes object
-header_fmt = '3sBiiBBBBB'
-v_fmt_precision = ".2f"  # Use this for floating-point precision formatting
+header_format = '3sBiiBBBBB'
+v_format_precision = ".2f"  # Use this for floating-point precision formatting
 
 ### encoder ###
 
@@ -23,35 +23,35 @@ def truncate(value, format_spec):
     """Truncate the value to the specified format."""
     try:
         return float(f"{value:{format_spec}}")
-    except ValueError as e:
-        raise ValueError(f"Invalid format code '{format_spec}' for value '{value}'") from e
+    except ValueError as error:
+        raise ValueError(f"Invalid format code '{format_spec}' for value '{value}'") from error
         
-def quantize(x, v_fmt):
-    """Truncate elements of x using v_fmt"""
+def quantize(x, v_format):
+    """Truncate elements of x using v_format"""
     for elem in x:
-        elem = truncate(elem, v_fmt)
+        elem = truncate(elem, v_format)
     return x
 
-def write_vector(f, x, v_fmt):
+def write_vector(f, x, v_format):
     """Write a sparse vector as a list of pairs (pos, value)"""
-    x = quantize(x, v_fmt)
+    x = quantize(x, v_format)
     x_norm_0 = np.linalg.norm(x, 0)
     f.write("B", int(x_norm_0))
 
-    position_fmt = "B" if len(x) <= 256 else "H"
+    position_format = "B" if len(x) <= 256 else "H"
     if x_norm_0 > 0:
         for i, value in enumerate(x):
             if value != 0:
-                f.write(position_fmt, i)
-                f.write("f", float(truncate(value, v_fmt)))
+                f.write(position_format, i)
+                f.write("f", float(truncate(value, v_format)))
 
-def _omp_code(x_list, image_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
+def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
     """ Process channel of image using Matching Pursuit. """
     """ The vector of coefficients 'x' is computed. """
 
     b = image_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
 
-    A = omp_d.get(N)
+    A = omp_dict.get(N)
     print(f"A = {A}")
 
     if A.shape[1] > b.size:
@@ -72,7 +72,7 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
     print(f"min_n = {min_n}, max_n = {max_n}")
 
     # STEP 0 - HEADER ###########################
-    version = fif_ver
+    version = fif_version
     A_id = 0
     ssim_stop = False
     callback = None
@@ -85,8 +85,8 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
     print(f"Image Mode: {image.mode}, Depth: {depth}, Width: {w}, Height: {h}")
 
     with RawFile(output_file, 'wb') as f:
-        print(header_fmt, magic_number, version, w, h, depth, A_id, bi, min_n, max_n,"\n")
-        f.write(header_fmt, magic_number, version, w, h, depth, A_id, bi, min_n, max_n)
+        print(header_format, magic_number, version, w, h, depth, A_id, bi, min_n, max_n,"\n")
+        f.write(header_format, magic_number, version, w, h, depth, A_id, bi, min_n, max_n)
 
         # STEP 1 - OMP ###########################
         image_data = np.array(image.getdata()).reshape(h, w, depth)
@@ -94,27 +94,27 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
         n0_cumu = 0
 
         # Initialize dictionary of sparse vectors for the whole image
-        omp_d = {}
+        omp_dict = {}
         n = min_n
         while n <= max_n:
             A = DCT1_Haar1_qt(n * n, a_cols)
-            print(f"Initializing omp_d[{n}] with matrix A of shape {A.shape}")
-            omp_d[n] = A
+            print(f"Initializing omp_dict[{n}] with matrix A of shape {A.shape}")
+            omp_dict[n] = A
             n *= 2
 
         x_list = []
         # Process each color channel of the entire image
         for k in range(depth): 
-            n0, x_list = _omp_code(x_list, image_data[:, :, k], None, omp_d, max_error, bi, 
+            n0, x_list = _omp_code(x_list, image_data[:, :, k], None, omp_dict, max_error, bi, 
                            max_n, k, stats, ssim_stop, min_n, max_n, callback)
             n0_cumu += n0
         print(f"x: {x_list}")
         
         # Write compressed data
-        for N, x in x_list:
-            f.write("B", N)
-            v_fmt = ".2f"  
-            write_vector(f, x.tolist(), v_fmt)
+        for n, x in x_list:
+            f.write("B", n)
+            v_format = ".2f"  
+            write_vector(f, x.tolist(), v_format)
 
         bytes_written = f.tell()
         print(f"bytes_written: {bytes_written}")
@@ -123,61 +123,61 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
 
 ### decoder ###
 
-def read_vector_as_pairs(f, v_fmt):
+def read_vector_as_pairs(f, v_format):
 	"""Read an sparse vector as a list of pairs (pos, value)"""
-	x = np.zeros(len(v_fmt))
+	x = np.zeros(len(v_format))
 	n0 = f.read("B")
-	pos_fmt = "B" if len(v_fmt) <= 256 else "H"
+	pos_format = "B" if len(v_format) <= 256 else "H"
 
 	for i in range(n0):
-		pos = f.read(pos_fmt)
-		value = f.read(v_fmt[pos])
+		pos = f.read(pos_format)
+		value = f.read(v_format[pos])
 		x[pos] = float(value)
 	return x
 
-def read_vector(f, v_fmt):
-    """Read vector from file f with format v_fmt"""
-    x = read_vector_as_pairs(f, v_fmt)
-    quantize_inv(x, v_fmt)
+def read_vector(f, v_format):
+    """Read vector from file f with format v_format"""
+    x = read_vector_as_pairs(f, v_format)
+    quantize_inv(x, v_format)
     return x
 
-def _omp_decode(f, image_data, bi, n, min_n, max_n, v_fmt):
+def _omp_decode(file, image_data, bi, n, min_n, max_n, v_format):
     """OMP decoder for the entire image"""
     A = DCT1_Haar1_qt(n * n, a_cols)
 
     # Read the vector x from the file
-    x = np.array(read_vector(f, v_fmt))
+    x = np.array(read_vector(file, v_format))
 
-    # Compute the output vector b = A * x
-    b = np.dot(A, x)
+    # Compute output_vector = A * x
+    output_vector = np.dot(A, x)
 
-    for elem in b:
+    for elem in output_vector:
         elem = truncate(elem, "B")
 
-    # Reconstruct the image data ( c_inv still not defined. Found in biyections.py)
-    image_data[:, :] = c_inv[bi](b, n).reshape(image_data.shape)
+    # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
+    image_data[:, :] = c_inv[bi](output_vector, n).reshape(image_data.shape)
     
     return image_data
 
 def decode(input_file, output_file):
     """Decompress input_file into output_file"""
-    with RawFile(input_file, 'rb') as f:
+    with RawFile(input_file, 'rb') as file:
         #Chequear porque me parece no recuerdo  A_id, bi, min_n, max_n si los guardé con el encoder.
         #En particular, la variable  A_id la borré de todo el código
-        magic_number_read, version, w, h, depth, A_id, bi, min_n, max_n = f.read(header_fmt)
+        magic_number_read, version, w, h, depth, A_id, bi, min_n, max_n = file.read(header_format)
         print(f"header: {magic_number_read}, {version}, {w}, {h}, {depth}, {A_id}, {bi}, {min_n}, {max_n}")
 
         if magic_number_read != magic_number.decode():
             raise Exception(f"Invalid image format: Wrong magic number '{magic_number_read}'")
 
-        if version != fif_ver:
-            raise Exception(f"Invalid codec version: {version}. Expected: {fif_ver}")
+        if version != fif_version:
+            raise Exception(f"Invalid codec version: {version}. Expected: {fif_version}")
 
         image_data = np.zeros((h, w, depth), dtype=np.float32)
 
         # Process image for each channel
         for k in range(depth):
-            image_data = _omp_decode(f, image_data[:, :, k], bi, max_n, min_n, max_n, v_fmt_precision)
+            image_data = _omp_decode(file, image_data[:, :, k], bi, max_n, min_n, max_n, v_format_precision)
 
         if depth == 1:
             image_data[:, :, 1] = image_data[:, :, 0]
