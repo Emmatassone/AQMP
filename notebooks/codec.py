@@ -76,19 +76,20 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
     A_id = 0
     ssim_stop = False
     callback = None
-    im = Image.open(input_file)
-    im = im.convert('YCbCr')
-    w, h = im.size
-    depth = mode_to_bpp(im.mode) // 8
+    image = Image.open(input_file)
+    image = image.convert('YCbCr')
+    w, h = image.size
+    depth = mode_to_bpp(image.mode) // 8
     raw_size = w * h * depth
 
-    print(f"Image Mode: {im.mode}, Depth: {depth}, Width: {w}, Height: {h}")
+    print(f"Image Mode: {image.mode}, Depth: {depth}, Width: {w}, Height: {h}")
 
     with RawFile(output_file, 'wb') as f:
+        print(header_fmt, magic_number, version, w, h, depth, A_id, bi, min_n, max_n,"\n")
         f.write(header_fmt, magic_number, version, w, h, depth, A_id, bi, min_n, max_n)
 
         # STEP 1 - OMP ###########################
-        im_data = np.array(im.getdata()).reshape(h, w, depth)
+        image_data = np.array(image.getdata()).reshape(h, w, depth)
         stats = {} 
         n0_cumu = 0
 
@@ -104,10 +105,11 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
         x_list = []
         # Process each color channel of the entire image
         for k in range(depth): 
-            n0, x_list = _omp_code(x_list, im_data[:, :, k], None, omp_d, max_error, bi, 
+            n0, x_list = _omp_code(x_list, image_data[:, :, k], None, omp_d, max_error, bi, 
                            max_n, k, stats, ssim_stop, min_n, max_n, callback)
             n0_cumu += n0
-
+        print(f"x: {x_list}")
+        
         # Write compressed data
         for N, x in x_list:
             f.write("B", N)
@@ -139,9 +141,9 @@ def read_vector(f, v_fmt):
     quantize_inv(x, v_fmt)
     return x
 
-def _omp_decode(f, im_data, bi, N, minN, maxN):
+def _omp_decode(f, image_data, bi, n, min_n, max_n):
     """OMP decoder for the entire image"""
-    A = DCT1_Haar1_qt(N * N, a_cols)
+    A = DCT1_Haar1_qt(n * n, a_cols)
 
     v_fmt = v_fmt_precision
 
@@ -155,35 +157,38 @@ def _omp_decode(f, im_data, bi, N, minN, maxN):
         elem = truncate(elem, "B")
 
     # Reconstruct the image data ( c_inv still not defined. Found in biyections.py)
-    im_data[:, :] = c_inv[bi](b, N).reshape(im_data.shape)
+    image_data[:, :] = c_inv[bi](b, n).reshape(image_data.shape)
+    
+    return image_data
 
 def decode(input_file, output_file):
     """Decompress input_file into output_file"""
     with RawFile(input_file, 'rb') as f:
-        #Chequear porque me parece no recuerdo  A_id, bi, minN, maxN si los guardé con el encoder.
+        #Chequear porque me parece no recuerdo  A_id, bi, min_n, max_n si los guardé con el encoder.
         #En particular, la variable  A_id la borré de todo el código
-        mn, version, w, h, depth, A_id, bi, minN, maxN = f.read(header_fmt) 
+        magic_number_read, version, w, h, depth, A_id, bi, min_n, max_n = f.read(header_fmt)
+        print(f"header: {magic_number_read}, {version}, {w}, {h}, {depth}, {A_id}, {bi}, {min_n}, {max_n}")
 
-        if mn != magic_number.decode():
-            raise Exception(f"Invalid image format: Wrong magic number '{mn}'")
+        if magic_number_read != magic_number.decode():
+            raise Exception(f"Invalid image format: Wrong magic number '{magic_number_read}'")
 
         if version != fif_ver:
             raise Exception(f"Invalid codec version: {version}. Expected: {fif_ver}")
 
-        im_data = np.zeros((h, w, depth), dtype=np.float32)
+        image_data = np.zeros((h, w, depth), dtype=np.float32)
 
         # Process image for each channel
         for k in range(depth):
-            _omp_decode(f, im_data[:, :, k], bi, maxN, minN, maxN)
+            image_data = _omp_decode(f, image_data[:, :, k], bi, max_n, min_n, max_n)
 
         if depth == 1:
-            im_data[:, :, 1] = im_data[:, :, 0]
-            im_data[:, :, 2] = im_data[:, :, 0]
+            image_data[:, :, 1] = image_data[:, :, 0]
+            image_data[:, :, 2] = image_data[:, :, 0]
 
-        YCbCr_to_RGB(im_data)
+        image_data = YCbCr_to_RGB(im_data)
 
-        im = Image.fromarray(im_data.astype('uint8'))
-        im.save(output_file)
+        image = Image.fromarray(image_data.astype('uint8'))
+        image.save(output_file)
 
 ###
 
@@ -200,6 +205,8 @@ def YCbCr_to_RGB(im_data):
     im_data[:, :, 0] = np.clip(R, 0, 255)
     im_data[:, :, 1] = np.clip(G, 0, 255)
     im_data[:, :, 2] = np.clip(B, 0, 255)
+    
+    return im_data
     
 def sub_image(im_data, n, i, j, k):
     """
