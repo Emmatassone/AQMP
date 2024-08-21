@@ -17,9 +17,7 @@ magic_number = b'FIF'  # Ensure this is a bytes object
 header_fmt = '3sBiiBBBBB'
 v_fmt_precision = ".2f"  # Use this for floating-point precision formatting
 
-def quantize(x, v_fmt):
-    for i in range(len(x)):
-        x[i] = truncate(x[i], v_fmt)
+## encoder ##
 
 def truncate(value, format_spec):
     """Truncate the value to the specified format."""
@@ -27,6 +25,10 @@ def truncate(value, format_spec):
         return float(f"{value:{format_spec}}")
     except ValueError as e:
         raise ValueError(f"Invalid format code '{format_spec}' for value '{value}'") from e
+
+def quantize(x, v_fmt):
+    for i in range(len(x)):
+        x[i] = truncate(x[i], v_fmt)
 
 def write_vector_as_pairs(f, x, n0, v_fmt):
     """Write a sparse vector as a list of pairs (pos, value)"""
@@ -43,53 +45,6 @@ def write_vector(f, x, v_fmt):
     quantize(x, v_fmt)
     n0 = np.linalg.norm(x, 0)
     write_vector_as_pairs(f, x, n0, v_fmt)
-
-def sub_image(im_data, n, i, j, k):
-    """
-    Extracts a sub-image from a larger image array.
-
-    Parameters:
-    - im_data: The full image data as a NumPy array.
-    - n: The size of the block.
-    - i, j: The starting indices for the block.
-    - k: The channel index.
-
-    Returns:
-    - The extracted sub-image as a NumPy array.
-    """
-    h0, h1, w0, w1 = i, i + n, j, j + n
-    return im_data[h0:h1, w0:w1, k]
-
-def set_sub_image(sub_img, im_data, n, i, j, k):
-    """
-    Places a sub-image back into the larger image array.
-
-    Parameters:
-    - sub_img: The sub-image to be placed back.
-    - im_data: The full image data as a NumPy array.
-    - n: The size of the block.
-    - i, j: The starting indices for the block.
-    - k: The channel index.
-    """
-    h0, h1, w0, w1 = i, i + n, j, j + n
-    im_data[h0:h1, w0:w1, k] = sub_img
-
-def mode_to_bpp(mode):
-    """Convert image mode to bits per pixel."""
-    if mode == 'L':  # 8-bit pixels, black and white
-        return 8
-    elif mode == 'RGB':  # 24-bit color
-        return 24
-    elif mode == 'RGBA':  # 32-bit color with alpha
-        return 32
-    elif mode == 'YCbCr':  # 24-bit color (YUV)
-        return 24
-    else:
-        raise ValueError(f"Unsupported image mode: {mode}")
-        
-def min_sparcity(max_error, N):
-    """Calculate minimum sparsity based on max_error and block size N."""
-    return int(np.ceil(max_error * N**2))
 
 def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
     b = im_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
@@ -111,7 +66,7 @@ def _omp_code(x_list, im_data, im_rec, omp_d, max_error, bi, N, k, stats, ssim_s
 
 def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
     """Compress input_file with the given parameters into output_file"""
-    print("N", min_n, max_n)
+    print(f"min_n = {min_n}, max_n = {max_n}")
 
     # STEP 0 - HEADER ###########################
     version = fif_ver
@@ -160,6 +115,138 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
         bytes_written = f.tell()
 
     return output_file, bytes_written, raw_size, n0_cumu
+
+## decoder ##
+
+def read_vector_as_pairs(f, v_fmt):
+	"""Read an sparse vector as a list of pairs (pos, value)"""
+
+	x = np.zeros(len(v_fmt))
+	n0 = f.read("B")
+	pos_fmt = "B" if len(v_fmt) <= 256 else "H"
+
+	for i in range(n0):
+		pos = f.read(pos_fmt)
+		value = f.read(v_fmt[pos])
+		x[pos] = float(value)
+	return x
+    
+def read_vector(f, v_fmt):
+    """Read vector from file f with format v_fmt"""
+    x = read_vector_as_pairs(f, v_fmt)
+    quantize_inv(x, v_fmt)
+    return x
+
+def _omp_decode(f, im_data, bi, N, minN, maxN):
+    """OMP decoder for the entire image"""
+
+    A = DCT1_Haar1_qt(N * N, a_cols)
+
+    v_fmt = v_fmt_precision
+
+    # Read the vector x from the file
+    x = np.array(read_vector(f, v_fmt))
+
+    # Compute the output vector b = A * x
+    b = np.dot(A, x)
+
+    for l in range(len(b)):
+        b[l] = truncate(b[l], "B")
+
+    # Reconstruct the image data ( c_inv still not defined. Found in biyections.py)
+    im_data[:, :] = c_inv[bi](b, N).reshape(im_data.shape)
+
+def decode(input_file, output_file):
+    """Decompress input_file into output_file"""
+
+    with RawFile(input_file, 'rb') as f:
+        #Chequear porque me parece no recuerdo  A_id, bi, minN, maxN si los guardé con el encoder.
+        #En particular, la variable  A_id la borré de todo el código
+        mn, version, w, h, depth, A_id, bi, minN, maxN = f.read(header_fmt) 
+
+        if mn != magic_number.decode():
+            raise Exception(f"Invalid image format: Wrong magic number '{mn}'")
+
+        if version != fif_ver:
+            raise Exception(f"Invalid codec version: {version}. Expected: {fif_ver}")
+
+        im_data = np.zeros((h, w, depth), dtype=np.float32)
+
+        # Process image for each channel
+        for k in range(depth):
+            _omp_decode(f, im_data[:, :, k], bi, maxN, minN, maxN)
+
+        if depth == 1:
+            im_data[:, :, 1] = im_data[:, :, 0]
+            im_data[:, :, 2] = im_data[:, :, 0]
+
+        YCbCr_to_RGB(im_data)
+
+        im = Image.fromarray(im_data.astype('uint8'))
+        im.save(output_file)
+
+##
+
+def YCbCr_to_RGB(im_data):
+    """Convert YCbCr to RGB."""
+    Y = im_data[:, :, 0]
+    Cb = im_data[:, :, 1] - 128
+    Cr = im_data[:, :, 2] - 128
+
+    R = Y + 1.402 * Cr
+    G = Y - 0.344136 * Cb - 0.714136 * Cr
+    B = Y + 1.772 * Cb
+
+    im_data[:, :, 0] = np.clip(R, 0, 255)
+    im_data[:, :, 1] = np.clip(G, 0, 255)
+    im_data[:, :, 2] = np.clip(B, 0, 255)
+    
+def sub_image(im_data, n, i, j, k):
+    """
+    Extracts a sub-image from a larger image array.
+
+    Parameters:
+    - im_data: The full image data as a NumPy array.
+    - n: The size of the block.
+    - i, j: The starting indices for the block.
+    - k: The channel index.
+
+    Returns:
+    - The extracted sub-image as a NumPy array.
+    """
+    h0, h1, w0, w1 = i, i + n, j, j + n
+    return im_data[h0:h1, w0:w1, k]
+
+def set_sub_image(sub_img, im_data, n, i, j, k):
+    """
+    Places a sub-image back into the larger image array.
+
+    Parameters:
+    - sub_img: The sub-image to be placed back.
+    - im_data: The full image data as a NumPy array.
+    - n: The size of the block.
+    - i, j: The starting indices for the block.
+    - k: The channel index.
+    """
+    h0, h1, w0, w1 = i, i + n, j, j + n
+    im_data[h0:h1, w0:w1, k] = sub_img
+
+def mode_to_bpp(mode):
+    """Convert image mode to bits per pixel."""
+    if mode == 'L':  # 8-bit pixels, black and white
+        return 8
+    elif mode == 'RGB':  # 24-bit color
+        return 24
+    elif mode == 'RGBA':  # 32-bit color with alpha
+        return 32
+    elif mode == 'YCbCr':  # 24-bit color (YUV)
+        return 24
+    else:
+        raise ValueError(f"Unsupported image mode: {mode}")
+        
+def min_sparcity(max_error, N):
+    """Calculate minimum sparsity based on max_error and block size N."""
+    return int(np.ceil(max_error * N**2))
 
 def print_progress(message, processed, total):
     """Print progress message."""
@@ -234,84 +321,3 @@ def DCT1_Haar1_qt(rows, cols):
     dct_matrix = DCT1_qt(rows, cols // 2)
     haar_matrix = Haar1_qt(rows, cols // 2)
     return np.concatenate((dct_matrix, haar_matrix), axis=1)
-
-def decode(input_file, output_file):
-    """Decompress input_file into output_file"""
-
-    with RawFile(input_file, 'rb') as f:
-        #Chequear porque me parece no recuerdo  A_id, bi, minN, maxN si los guardé con el encoder.
-        #En particular, la variable  A_id la borré de todo el código
-        mn, version, w, h, depth, A_id, bi, minN, maxN = f.read(header_fmt) 
-
-        if mn != magic_number.decode():
-            raise Exception(f"Invalid image format: Wrong magic number '{mn}'")
-
-        if version != fif_ver:
-            raise Exception(f"Invalid codec version: {version}. Expected: {fif_ver}")
-
-        im_data = np.zeros((h, w, depth), dtype=np.float32)
-
-        # Process image for each channel
-        for k in range(depth):
-            _omp_decode(f, im_data[:, :, k], bi, maxN, minN, maxN)
-
-        if depth == 1:
-            im_data[:, :, 1] = im_data[:, :, 0]
-            im_data[:, :, 2] = im_data[:, :, 0]
-
-        YCbCr_to_RGB(im_data)
-
-        im = Image.fromarray(im_data.astype('uint8'))
-        im.save(output_file)
-
-def _omp_decode(f, im_data, bi, N, minN, maxN):
-    """OMP decoder for the entire image"""
-
-    A = DCT1_Haar1_qt(N * N, a_cols)
-
-    v_fmt = v_fmt_precision
-
-    # Read the vector x from the file
-    x = np.array(read_vector(f, v_fmt))
-
-    # Compute the output vector b = A * x
-    b = np.dot(A, x)
-
-    for l in range(len(b)):
-        b[l] = truncate(b[l], "B")
-
-    # Reconstruct the image data ( c_inv still not defined. Found in biyections.py)
-    im_data[:, :] = c_inv[bi](b, N).reshape(im_data.shape)
-
-def read_vector_as_pairs(f, v_fmt):
-	"""Read an sparse vector as a list of pairs (pos, value)"""
-
-	x = np.zeros(len(v_fmt))
-	n0 = f.read("B")
-	pos_fmt = "B" if len(v_fmt) <= 256 else "H"
-
-	for i in range(n0):
-		pos = f.read(pos_fmt)
-		value = f.read(v_fmt[pos])
-		x[pos] = float(value)
-	return x
-    
-def read_vector(f, v_fmt):
-    """Read vector from file f with format v_fmt"""
-    x = read_vector_as_pairs(f, v_fmt)
-    quantize_inv(x, v_fmt)
-    return x
-
-def YCbCr_to_RGB(im_data):
-    """Convert YCbCr to RGB."""
-    Y = im_data[:, :, 0]
-    Cb = im_data[:, :, 1] - 128
-    Cr = im_data[:, :, 2] - 128
-
-    R = Y + 1.402 * Cr
-    G = Y - 0.344136 * Cb - 0.714136 * Cr
-    B = Y + 1.772 * Cb
-
-    im_data[:, :, 0] = np.clip(R, 0, 255)
-    im_data[:, :, 1] = np.clip(G, 0, 255)
-    im_data[:, :, 2] = np.clip(B, 0, 255)
