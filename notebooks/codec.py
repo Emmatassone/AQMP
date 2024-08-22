@@ -126,36 +126,33 @@ def write_vector(file, x, v_format):
 
 ### decoder ###
 
-def read_vector(file, v_format):
+def read_vector(file):
     """
-    Read vector from 'file' with format 'v_format'
+    Read vector from 'file'
     Read an sparse vector as a list of pairs (pos, value)
     """
-    x = np.zeros(len(v_format)) # v_format tiene que estar en el header del file?
+    n0 = file.read("B") # ver si esta bien que siempre sea "B"
+    x = np.zeros(n0)
 
-    print(f"v_format: {v_format}")
-    print(f"x.shape:  {np.array(x).shape}")
-
-    n0 = file.read("B")
-    pos_format = "B" if len(v_format) <= 256 else "H"
-    
+    print(f"x.shape: {x.shape}")    
     print("\n (pos, value) pairs:\n")
+
+    pos_format = "B" if x.shape[0] <= 256 else "H"
     for _ in range(n0):
         pos = file.read(pos_format)
-        print(f"pos: {pos}")
-
         value = file.read("f")
-        print(f"value: {value}")
-
-        x[pos] = float(value)
-        return x
+        x[pos] = value
+        
+        print(f"pos: {pos}")
+        print(f"value: {value}\n")
+    return x
 
 def _omp_decode(file, image_data, bi, n, min_n, max_n, v_format):
     """OMP decoder for the entire image"""
     A = DCT1_Haar1_qt(n * n, a_cols)
 
     # Read the vector x from the file
-    x = np.array(read_vector(file, v_format))
+    x = np.array(read_vector(file))
 
     # Compute output_vector = A * x
     output_vector = np.dot(A, x)
