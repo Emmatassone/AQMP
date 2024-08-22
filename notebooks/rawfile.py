@@ -34,11 +34,12 @@ class RawFile:
         if fmt != "n":
             fmt = "!" + fmt
             size = calcsize(fmt)
-            print(f"size: {size}")
             data = self.file.read(size)
-            print(f"data: {data}")
             udata = unpack(fmt, data)
-            print(f"udata: {udata}\n")
+
+            print(f"size read: {size}")
+            print(f"data read: {data}")
+            print(f"udata read: {udata}\n")
             return [u.decode('utf-8') if isinstance(u, bytes) else u for u in udata] if len(udata) > 1 else udata[0]
         else:
             raise ValueError("fmt = n. Not implemented.")

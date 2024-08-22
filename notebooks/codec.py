@@ -2,7 +2,6 @@ import numpy as np
 from numpy import array, concatenate, sign
 import io
 from PIL import Image
-from struct import pack, unpack, calcsize
 from math import pi, cos, sin, log, sqrt
 from sklearn.linear_model import OrthogonalMatchingPursuit
 from scipy.sparse import csc_matrix
@@ -16,6 +15,8 @@ fif_version = 2
 magic_number = b'FIF'  # Ensure this is a bytes object
 header_format = '3sBiiBBBBB'
 v_format_precision = ".2f"  # Use this for floating-point precision formatting
+
+# por que se usa v_format_precision = ".2f" ?
 
 ### encoder ###
 
@@ -31,19 +32,6 @@ def quantize(x, v_format):
     for elem in x:
         elem = truncate(elem, v_format)
     return x
-
-def write_vector(f, x, v_format):
-    """Write a sparse vector as a list of pairs (pos, value)"""
-    x = quantize(x, v_format)
-    x_norm_0 = np.linalg.norm(x, 0)
-    f.write("B", int(x_norm_0))
-
-    position_format = "B" if len(x) <= 256 else "H"
-    if x_norm_0 > 0:
-        for i, value in enumerate(x):
-            if value != 0:
-                f.write(position_format, i)
-                f.write("f", float(truncate(value, v_format)))
 
 def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
     """ Process channel of image using Matching Pursuit. """
@@ -112,34 +100,55 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
         
         # Write compressed data
         for n, x in x_list:
-            f.write("B", n)
-            v_format = ".2f"  
-            write_vector(f, x.tolist(), v_format)
+            # f.write("B", n) # para qué está esta línea?
+            write_vector(f, x.tolist(), ".2f")
 
         bytes_written = f.tell()
         print(f"bytes_written: {bytes_written}")
 
-    return output_file, bytes_written, raw_size, n0_cumu
+    return bytes_written, raw_size, n0_cumu
+
+def write_vector(file, x, v_format):
+    """Write a sparse vector as a list of pairs (pos, value)"""
+    x = quantize(x, v_format)
+    x_norm_0 = np.linalg.norm(x, 0)
+    print(f"x.shape:  {np.array(x).shape}")
+    print(f"norm_0 of x: {x_norm_0}")
+
+    file.write("B", int(x_norm_0))
+
+    position_format = "B" if len(x) <= 256 else "H"
+    if x_norm_0 > 0:
+        for position, value in enumerate(x):
+            if value != 0:
+                file.write(position_format, position)
+                file.write("f", float(truncate(value, v_format)))
 
 ### decoder ###
 
-def read_vector_as_pairs(f, v_format):
-	"""Read an sparse vector as a list of pairs (pos, value)"""
-	x = np.zeros(len(v_format))
-	n0 = f.read("B")
-	pos_format = "B" if len(v_format) <= 256 else "H"
+def read_vector(file, v_format):
+    """
+    Read vector from 'file' with format 'v_format'
+    Read an sparse vector as a list of pairs (pos, value)
+    """
+    x = np.zeros(len(v_format)) # v_format tiene que estar en el header del file?
 
-	for i in range(n0):
-		pos = f.read(pos_format)
-		value = f.read(v_format[pos])
-		x[pos] = float(value)
-	return x
+    print(f"v_format: {v_format}")
+    print(f"x.shape:  {np.array(x).shape}")
 
-def read_vector(f, v_format):
-    """Read vector from file f with format v_format"""
-    x = read_vector_as_pairs(f, v_format)
-    quantize_inv(x, v_format)
-    return x
+    n0 = file.read("B")
+    pos_format = "B" if len(v_format) <= 256 else "H"
+    
+    print("\n (pos, value) pairs:\n")
+    for _ in range(n0):
+        pos = file.read(pos_format)
+        print(f"pos: {pos}")
+
+        value = file.read("f")
+        print(f"value: {value}")
+
+        x[pos] = float(value)
+        return x
 
 def _omp_decode(file, image_data, bi, n, min_n, max_n, v_format):
     """OMP decoder for the entire image"""
