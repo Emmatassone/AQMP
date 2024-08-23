@@ -37,7 +37,7 @@ def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, basis_index, n, k
     """ Process channel of image using Matching Pursuit. """
     """ The vector of coefficients 'x' is computed. """
     print( f" image_data.flatten().shape {image_data.flatten().shape}")
-    y = image_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
+    y = image_data.flatten() # [:1024] # trunco y solamente de prueba para hacer coincidir las dimensiones. arreglar
 
     A = omp_dict.get(n)
     #print(f"A = {A}")
@@ -160,7 +160,6 @@ def read_vector(file):
         
         print(f"pos: {pos}")
         print(f"value: {value}\n")
-    print("read vector\n")
     return x
 
 def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format):
@@ -180,7 +179,7 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format):
     # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
      # image_data[:, :] = c_inv[basis_index](output_vector, n).reshape(image_data.shape) # por qué usar c_inv?
     
-    image_data[:, :] = output_vector.reshape((32, 32))
+    image_data[:, :] = output_vector.reshape(image_data.shape)
     # luego cambiar (32, 32) por 'image_data.shape'
     # ahora se usa porque: y = image_data.flatten()[:1024]
     return image_data
@@ -202,7 +201,10 @@ def decode(input_file, output_file):
         image_data = np.zeros((h, w, depth), dtype=np.float32)
 
         # Process image for each channel
+        iterations = 0
         for k in range(depth):
+            iterations += 1
+            print(f"iterations: {iterations}")
             image_data = _omp_decode(file, image_data[:, :, k], basis_index, max_n, min_n, max_n, v_format_precision)
 
         if depth == 1:
