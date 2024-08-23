@@ -160,6 +160,7 @@ def read_vector(file):
         
         print(f"pos: {pos}")
         print(f"value: {value}\n")
+    print("read vector\n")
     return x
 
 def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format):
@@ -168,12 +169,13 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format):
 
     # Read the vector x from the file
     x = np.array(read_vector(file))
+    print(f"read vector x from file {x}")
 
     # Compute output_vector = A * x
     output_vector = np.dot(A, x)
 
     for elem in output_vector:
-        elem = truncate(elem, "B")
+        elem = truncate(elem, ".2f") # por que se quiere truncar acá?
 
     # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
     image_data[:, :] = c_inv[basis_index](output_vector, n).reshape(image_data.shape)
