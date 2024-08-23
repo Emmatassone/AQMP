@@ -204,8 +204,8 @@ def decode(input_file, output_file):
         iterations = 0
         for k in range(depth):
             iterations += 1
-            print(f"iterations: {iterations}")
-            image_data = _omp_decode(file, image_data[:, :, k], basis_index, max_n, min_n, max_n, v_format_precision)
+            print(f"iterations: {iterations}, image_data.shape:{image_data.shape}")
+            image_data[:, :, k] = _omp_decode(file, image_data[:, :, k], basis_index, max_n, min_n, max_n, v_format_precision)
 
         if depth == 1:
             image_data[:, :, 1] = image_data[:, :, 0]
