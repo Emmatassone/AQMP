@@ -8,8 +8,8 @@ from scipy.sparse import csc_matrix
 import zlib
 from rawfile import RawFile
 
-min_n = 8
-max_n = 32
+min_n = 2**3
+max_n = 2**5
 a_cols = 256
 fif_version = 2
 magic_number = b'FIF'  # Ensure this is a bytes object
@@ -33,29 +33,29 @@ def quantize(x, v_format):
         elem = truncate(elem, v_format)
     return x
 
-def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, bi, N, k, stats, ssim_stop, min_n, max_n, callback):
+def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, basis_index, n, k, stats, ssim_stop, min_n, max_n, callback):
     """ Process channel of image using Matching Pursuit. """
     """ The vector of coefficients 'x' is computed. """
+    print( f" image_data.flatten().shape {image_data.flatten().shape}")
+    y = image_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
 
-    b = image_data.flatten()[:1024] # trunco b solamente de prueba para hacer coincidir las dimensiones. arreglar
+    A = omp_dict.get(n)
+    #print(f"A = {A}")
 
-    A = omp_dict.get(N)
-    print(f"A = {A}")
+    if A.shape[1] > y.size:
+        A = A[:, :y.size]
+    print(f"A.shape: {A.shape}, y.shape{y.shape}")
 
-    if A.shape[1] > b.size:
-        A = A[:, :b.size]
-    print(f"A.shape: {A.shape}, b.shape{b.shape}")
-    
     # Perform OMP on the entire image
-    omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(A.shape[1], b.size))
-    omp.fit(A, b)
+    omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(A.shape[1], y.size))
+    omp.fit(A, y)
     x = omp.coef_
-    
-    x_list.append((N, x))
+
+    x_list.append((n, x))
     processed_blocks = 1
     return processed_blocks, x_list
 
-def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
+def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max_n):
     """Compress input_file with the given parameters into output_file"""
     print(f"min_n = {min_n}, max_n = {max_n}")
 
@@ -67,14 +67,15 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
     image = Image.open(input_file)
     image = image.convert('YCbCr')
     w, h = image.size
+    print(f"image size: {image.size}")
     depth = mode_to_bpp(image.mode) // 8
     raw_size = w * h * depth
 
     print(f"Image Mode: {image.mode}, Depth: {depth}, Width: {w}, Height: {h}")
 
     with RawFile(output_file, 'wb') as f:
-        print(header_format, magic_number, version, w, h, depth, A_id, bi, min_n, max_n,"\n")
-        f.write(header_format, magic_number, version, w, h, depth, A_id, bi, min_n, max_n)
+        print(header_format, magic_number, version, w, h, depth, A_id, basis_index, min_n, max_n,"\n")
+        f.write(header_format, magic_number, version, w, h, depth, A_id, basis_index, min_n, max_n)
 
         # STEP 1 - OMP ###########################
         image_data = np.array(image.getdata()).reshape(h, w, depth)
@@ -83,20 +84,33 @@ def code(input_file, output_file, max_error, bi, min_n=min_n, max_n=max_n):
 
         # Initialize dictionary of sparse vectors for the whole image
         omp_dict = {}
-        n = min_n
-        while n <= max_n:
-            A = DCT1_Haar1_qt(n * n, a_cols)
-            print(f"Initializing omp_dict[{n}] with matrix A of shape {A.shape}")
-            omp_dict[n] = A
-            n *= 2
+        n = max_n
+
+        # while n <= max_n: lo hacemos para un solo 'n'
+        A = DCT1_Haar1_qt(n * n, a_cols)
+        print(f"Initializing omp_dict[{n}] with matrix A of shape {A.shape}")
+        omp_dict[n] = A
+        #n *= 2
 
         x_list = []
         # Process each color channel of the entire image
         for k in range(depth): 
-            n0, x_list = _omp_code(x_list, image_data[:, :, k], None, omp_dict, max_error, bi, 
-                           max_n, k, stats, ssim_stop, min_n, max_n, callback)
+            n0, x_list = _omp_code(x_list = x_list,
+                                   image_data = image_data[:, :, k],
+                                   im_rec = None,
+                                   omp_dict = omp_dict,
+                                   max_error = max_error,
+                                   basis_index = basis_index,
+                                   n = n,
+                                   k = k,
+                                   stats = stats,
+                                   ssim_stop = ssim_stop,
+                                   min_n = min_n,
+                                   max_n = max_n,
+                                   callback = callback
+                                   )
             n0_cumu += n0
-        print(f"x: {x_list}")
+        print(f"x: {x_list}") # x_list tiene info de los 3 canales
         
         # Write compressed data
         for n, x in x_list:
@@ -121,6 +135,7 @@ def write_vector(file, x, v_format):
     if x_norm_0 > 0:
         for position, value in enumerate(x):
             if value != 0:
+                print(f"position not zero: {position}")
                 file.write(position_format, position)
                 file.write("f", float(truncate(value, v_format)))
 
@@ -132,7 +147,7 @@ def read_vector(file):
     Read an sparse vector as a list of pairs (pos, value)
     """
     n0 = file.read("B") # ver si esta bien que siempre sea "B"
-    x = np.zeros(n0)
+    x = np.zeros(a_cols)
 
     print(f"x.shape: {x.shape}")    
     print("\n (pos, value) pairs:\n")
@@ -147,7 +162,7 @@ def read_vector(file):
         print(f"value: {value}\n")
     return x
 
-def _omp_decode(file, image_data, bi, n, min_n, max_n, v_format):
+def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format):
     """OMP decoder for the entire image"""
     A = DCT1_Haar1_qt(n * n, a_cols)
 
@@ -161,17 +176,17 @@ def _omp_decode(file, image_data, bi, n, min_n, max_n, v_format):
         elem = truncate(elem, "B")
 
     # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
-    image_data[:, :] = c_inv[bi](output_vector, n).reshape(image_data.shape)
+    image_data[:, :] = c_inv[basis_index](output_vector, n).reshape(image_data.shape)
     
     return image_data
 
 def decode(input_file, output_file):
     """Decompress input_file into output_file"""
     with RawFile(input_file, 'rb') as file:
-        #Chequear porque me parece no recuerdo  A_id, bi, min_n, max_n si los guardé con el encoder.
+        #Chequear porque me parece no recuerdo  A_id, basis_index, min_n, max_n si los guardé con el encoder.
         #En particular, la variable  A_id la borré de todo el código
-        magic_number_read, version, w, h, depth, A_id, bi, min_n, max_n = file.read(header_format)
-        print(f"header: {magic_number_read}, {version}, {w}, {h}, {depth}, {A_id}, {bi}, {min_n}, {max_n}")
+        magic_number_read, version, w, h, depth, A_id, basis_index, min_n, max_n = file.read(header_format)
+        print(f"header: {magic_number_read}, {version}, {w}, {h}, {depth}, {A_id}, {basis_index}, {min_n}, {max_n}")
 
         if magic_number_read != magic_number.decode():
             raise Exception(f"Invalid image format: Wrong magic number '{magic_number_read}'")
@@ -183,7 +198,7 @@ def decode(input_file, output_file):
 
         # Process image for each channel
         for k in range(depth):
-            image_data = _omp_decode(file, image_data[:, :, k], bi, max_n, min_n, max_n, v_format_precision)
+            image_data = _omp_decode(file, image_data[:, :, k], basis_index, max_n, min_n, max_n, v_format_precision)
 
         if depth == 1:
             image_data[:, :, 1] = image_data[:, :, 0]
