@@ -14,7 +14,7 @@ a_cols = 256
 fif_version = 2
 magic_number = b'FIF'  # Ensure this is a bytes object
 header_format = '3sBiiBBBBB'
-v_format_precision = ".2f"  # Use this for floating-point precision formatting
+v_format_precision = "f"  # Use this for floating-point precision formatting
 
 # por que se usa v_format_precision = ".2f" ?
 
@@ -115,7 +115,7 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
         # Write compressed data
         for n, x in x_list:
             # f.write("B", n) # para qué está esta línea?
-            write_vector(f, x.tolist(), ".2f")
+            write_vector(f, x.tolist(), v_format_precision) # por que usar ".2f"?
 
         bytes_written = f.tell()
         print(f"bytes_written: {bytes_written}")
@@ -175,7 +175,7 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format):
     print(f"output_vector.shape: {output_vector.shape}")
 
     for elem in output_vector:
-        elem = truncate(elem, ".2f") # por que se quiere truncar acá?
+        elem = truncate(elem, v_format_precision) # por que se quiere truncar acá?
     # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
      # image_data[:, :] = c_inv[basis_index](output_vector, n).reshape(image_data.shape) # por qué usar c_inv?
     
@@ -211,7 +211,7 @@ def decode(input_file, output_file):
             image_data[:, :, 1] = image_data[:, :, 0]
             image_data[:, :, 2] = image_data[:, :, 0]
 
-        image_data = YCbCr_to_RGB(image_data)
+        image_data = YCbCr_to_RGB(image_data) # por que no usar .convert('RGB') de clase Image?
 
         image = Image.fromarray(image_data.astype('uint8'))
         image.save(output_file)
