@@ -173,13 +173,16 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format):
 
     # Compute output_vector = A * x
     output_vector = np.dot(A, x)
+    print(f"output_vector.shape: {output_vector.shape}")
 
     for elem in output_vector:
         elem = truncate(elem, ".2f") # por que se quiere truncar acá?
-
     # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
-    image_data[:, :] = c_inv[basis_index](output_vector, n).reshape(image_data.shape)
+     # image_data[:, :] = c_inv[basis_index](output_vector, n).reshape(image_data.shape) # por qué usar c_inv?
     
+    image_data[:, :] = output_vector.reshape((32, 32))
+    # luego cambiar (32, 32) por 'image_data.shape'
+    # ahora se usa porque: y = image_data.flatten()[:1024]
     return image_data
 
 def decode(input_file, output_file):
