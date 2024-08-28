@@ -38,31 +38,42 @@ def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, basis_index, n, k
     """ Process channel of image using Matching Pursuit. """
     """ The vector of coefficients 'coefs' is computed. """
 
-    image_data = image_data.flatten()
-    dict_ = omp_dict.get(n)
-    if dict_.shape[1] > image_data.size:
-        dict_ = dict_[:, :y.size]
+    # falta caso de subimagenes de los bordes, que pueden ser mas chicas de lo que se trata acá
+    size_block = n
+    for i in range(image_data.shape[0] // size_block):
+        for j in range(image_data.shape[1] // size_block):
+            # get subimage from 'image_data'
+            from_dim0 = i * size_block
+            from_dim1 = j * size_block
+            sub_image_data = sub_image(image_data, size_block, from_dim0, from_dim1)
 
-    print(f"dict.shape: {dict_.shape}, image_data.shape{image_data.shape}")
+            sub_image_data = sub_image_data.flatten()
 
-    # Perform OMP on the entire image
-    omp = OrthogonalMatchingPursuit(n_nonzero_coefs= min(dict_.shape[1], image_data.size), fit_intercept=False)
-    omp.fit(dict_, image_data)
-    coefs = omp.coef_
+            dict_ = omp_dict.get(n)
 
-    # pred = np.dot(dict_, coefs) + omp.intercept_
-    pred = omp.predict(dict_)
-    pred = pred.reshape(32, 32)
-    # Compute SSIM
-    image_data = image_data.reshape(32,32)
-    similarity_index = ssim(image_data,
-                            pred,
-                            data_range=pred.max() - pred.min())
-    print(f"ssim = {similarity_index}")
+            if dict_.shape[1] > sub_image_data.size:
+                dict_ = dict_[:, :sub_image_data.size]
 
-    x_list.append((n, coefs))
-    processed_blocks = 1
-    return processed_blocks, x_list, omp
+            print(f"dict.shape: {dict_.shape}, sub_image_data.shape{sub_image_data.shape}")
+
+            # Perform OMP on the entire image
+            omp = OrthogonalMatchingPursuit(n_nonzero_coefs= min(dict_.shape[1], image_data.size), fit_intercept=False)
+            omp.fit(dict_, sub_image_data)
+            coefs = omp.coef_
+            x_list.append((n, coefs))
+            processed_blocks = 1
+    return processed_blocks, x_list
+
+    # líneas para probar los resultados antes de pasarlos a binario en '_omp_code':
+    # # pred = np.dot(dict_, coefs) + omp.intercept_
+    # pred = omp.predict(dict_)
+    # pred = pred.reshape(32, 32)
+    # # Compute SSIM
+    # image_data = image_data.reshape(32,32)
+    # similarity_index = ssim(image_data,
+    #                         pred,
+    #                         data_range=pred.max() - pred.min())
+    # print(f"ssim = {similarity_index}")
 
 def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max_n):
     """Compress input_file with the given parameters into output_file"""
@@ -73,6 +84,7 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
     A_id = 0
     ssim_stop = False
     callback = None
+
     image = Image.open(input_file)
     image = image.convert('YCbCr')
     w, h = image.size
@@ -83,7 +95,7 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
     print(f"Image Mode: {image.mode}, Depth: {depth}, Width: {w}, Height: {h}")
 
     with RawFile(output_file, 'wb') as f:
-        print(header_format, magic_number, version, w, h, depth, A_id, basis_index, min_n, max_n,"\n")
+        #print(header_format, magic_number, version, w, h, depth, A_id, basis_index, min_n, max_n,"\n")
         f.write(header_format, magic_number, version, w, h, depth, A_id, basis_index, min_n, max_n)
 
         # STEP 1 - OMP ###########################
@@ -103,8 +115,8 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
 
         x_list = []
         # Process each color channel of the entire image
-        for k in range(depth): 
-            n0, x_list, omp = _omp_code(x_list = x_list,
+        for k in range(depth):
+            n0, x_list = _omp_code(x_list = x_list,
                                    image_data = image_data[:, :, k],
                                    im_rec = None,
                                    omp_dict = omp_dict,
@@ -119,33 +131,6 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
                                    callback = callback
                                    )
             n0_cumu += n0
-        # print(f"x: {x_list}") # x_list tiene info de los 3 canales
-        
-        ###
-        # save image before writing in binary format
-        image_data_test = np.zeros((h, w, depth), dtype=np.float32)
-        image_data_test_channel_shape = image_data_test[:, :, 0].shape
-        idx = 0
-        for _, x in x_list:
-            print(x)
-            output_vector_test = np.dot(A, x) #+ omp.intercept_
-            #print(f"intercept {omp.intercept_, omp.intercept_.shape}")
-            print(f"output_vector_test {output_vector_test}")
-            image_data_test[:, :, idx] = output_vector_test.reshape(image_data_test_channel_shape)
-            idx+=1
-        print(image_data.shape, image_data_test.shape)
-        similarity_index = ssim(image_data_test,
-                                image_data,
-                                data_range=image_data.max() - image_data.min(),
-                                channel_axis=2
-                                )
-        print(f"ssim all channels = {similarity_index}")
-
-        image_data_test = YCbCr_to_RGB(image_data_test) # por que no usar .convert('RGB') de clase Image?
-        image_data_test = Image.fromarray(image_data_test.astype('uint8'))
-        image_data_test.save("lenna_test.png")
-
-        ###
 
         # Write compressed data
         for n, x in x_list:
@@ -156,6 +141,33 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
         print(f"bytes_written: {bytes_written}")
 
     return bytes_written, raw_size, n0_cumu
+
+        # líneas para probar los resultados antes de pasarlos a binario en 'code':
+
+        # print(f"x: {x_list}") # x_list tiene info de los 3 canales
+        # ###
+        # # save image before writing in binary format
+        # image_data_test = np.zeros((h, w, depth), dtype=np.float32)
+        # image_data_test_channel_shape = image_data_test[:, :, 0].shape
+        # idx = 0
+        # for _, x in x_list:
+        #     print(x)
+        #     output_vector_test = np.dot(A, x) # + omp.intercept_
+        #     print(f"output_vector_test {output_vector_test}")
+        #     image_data_test[:, :, idx] = output_vector_test.reshape(image_data_test_channel_shape)
+        #     idx+=1
+        # #print(image_data.shape, image_data_test.shape)
+        # similarity_index = ssim(image_data_test,
+        #                         image_data,
+        #                         data_range=image_data.max() - image_data.min(),
+        #                         channel_axis=2
+        #                         )
+        # print(f"ssim all channels = {similarity_index}")
+        # image_data_test = YCbCr_to_RGB(image_data_test) # por que no usar .convert('RGB') de clase Image?
+        # image_data_test = Image.fromarray(image_data_test.astype('uint8'))
+        # image_data_test.save("lenna_test.png")
+        ###
+
 
 def write_vector(file, x, v_format):
     """Write a sparse vector as a list of pairs (pos, value)"""
@@ -269,7 +281,7 @@ def YCbCr_to_RGB(image_data):
     
     return image_data
     
-def sub_image(image_data, n, i, j, k):
+def sub_image(image_data, n, i, j, k = None):
     """
     Extracts a sub-image from a larger image array.
 
@@ -283,7 +295,11 @@ def sub_image(image_data, n, i, j, k):
     - The extracted sub-image as a NumPy array.
     """
     h0, h1, w0, w1 = i, i + n, j, j + n
-    return image_data[h0:h1, w0:w1, k]
+    if k == None:
+        output = image_data[h0:h1, w0:w1]
+    else:
+        output = image_data[h0:h1, w0:w1, k]
+    return output
 
 def set_sub_image(sub_img, image_data, n, i, j, k):
     """
