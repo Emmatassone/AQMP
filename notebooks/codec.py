@@ -54,13 +54,13 @@ def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, basis_index, n, k
             if dict_.shape[1] > sub_image_data.size:
                 dict_ = dict_[:, :sub_image_data.size]
 
-            print(f"dict.shape: {dict_.shape}, sub_image_data.shape{sub_image_data.shape}")
+            # print(f"dict.shape: {dict_.shape}, sub_image_data.shape{sub_image_data.shape}")
 
-            # Perform OMP on the entire image
+            # Perform OMP on the block
             omp = OrthogonalMatchingPursuit(n_nonzero_coefs= min(dict_.shape[1], image_data.size), fit_intercept=False)
             omp.fit(dict_, sub_image_data)
             coefs = omp.coef_
-            x_list.append((n, i, j, k, coefs)) # se puede agregar i, j acá
+            x_list.append((n, i, j, k, coefs)) 
             channel_processed_blocks += 1
     return channel_processed_blocks, x_list
 
@@ -146,28 +146,30 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
         bytes_written = f.tell()
         print(f"bytes_written: {bytes_written}")
 
-        # save image before writing in binary format
-        image_data_test = np.zeros((h, w, depth), dtype=np.float32)
-        #image_data_test_channel_shape = image_data_test[:, :, 0].shape
-        idx = 0
-        for n, i, j, k, x in x_list:
-            print(x)
-            output_vector_test = np.dot(A, x) # + omp.intercept_
-            print(f"output_vector_test {output_vector_test}")
-            image_data_test[i*n:i*n+n, j*n: j*n+n, k] = output_vector_test.reshape((n,n))
-            idx+=1
-        #print(image_data.shape, image_data_test.shape)
-        similarity_index = ssim(image_data_test,
-                                image_data,
-                                data_range=image_data.max() - image_data.min(),
-                                channel_axis=2
-                                )
-        print(f"ssim all channels = {similarity_index}")
-        image_data_test = YCbCr_to_RGB(image_data_test) # por que no usar .convert('RGB') de clase Image?
-        image_data_test = Image.fromarray(image_data_test.astype('uint8'))
-        image_data_test.save("lenna_test.png")
-
     return bytes_written, raw_size, processed_blocks
+
+
+        # # save image before writing in binary format
+        # image_data_test = np.zeros((h, w, depth), dtype=np.float32)
+        # #image_data_test_channel_shape = image_data_test[:, :, 0].shape
+        # idx = 0
+        # for n, i, j, k, x in x_list:
+        #     #print(x)
+        #     output_vector_test = np.dot(A, x) # + omp.intercept_
+        #     #print(f"output_vector_test {output_vector_test}")
+        #     image_data_test[i*n:i*n+n, j*n: j*n+n, k] = output_vector_test.reshape((n,n))
+        #     idx+=1
+        # #print(image_data.shape, image_data_test.shape)
+        # similarity_index = ssim(image_data_test,
+        #                         image_data,
+        #                         data_range=image_data.max() - image_data.min(),
+        #                         channel_axis=2
+        #                         )
+        # print(f"ssim all channels = {similarity_index}")
+        # image_data_test = YCbCr_to_RGB(image_data_test) # por que no usar .convert('RGB') de clase Image?
+        # image_data_test = Image.fromarray(image_data_test.astype('uint8'))
+        # image_data_test.save("lenna_test.png")
+
 
         # líneas para probar los resultados antes de pasarlos a binario en 'code':
 
@@ -202,8 +204,8 @@ def write_vector(file, x, v_format):
 
     x = quantize(x, v_format)
     x_norm_0 = np.linalg.norm(x, 0)
-    print(f"x.shape:  {np.array(x).shape}")
-    print(f"norm_0 of x: {x_norm_0}")
+    #print(f"x.shape:  {np.array(x).shape}")
+    #print(f"norm_0 of x: {x_norm_0}")
 
     file.write("B", int(x_norm_0))
 
@@ -227,8 +229,8 @@ def read_vector(file):
    
     x_norm_0 = file.read("B") # ver si esta bien que siempre sea "B"
     x = np.zeros(a_cols)
-    print(f"x.shape: {x.shape}")    
-    print("\n (pos, value) pairs:\n")
+    #print(f"x.shape: {x.shape}")    
+    #print("\n (pos, value) pairs:\n")
 
     pos_format = "B" if x.shape[0] <= 256 else "H"
     for _ in range(x_norm_0):
@@ -236,8 +238,8 @@ def read_vector(file):
         value = file.read("f")
         x[pos] = value
         
-        print(f"pos: {pos}")
-        print(f"value: {value}\n")
+        #print(f"pos: {pos}")
+        #print(f"value: {value}\n")
     return x
 
 def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format, processed_blocks):
@@ -246,7 +248,7 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format, proces
     A = DCT1_Haar1_qt(n * n, a_cols) #
 
     # no necesito saber como esta particionada la imagen. solo necesito saber la cantidad de bloques.
-    for _ in range(processed_blocks):
+    for block in range(processed_blocks):
 
         # leo variables del bloque 
         i = file.read("B")
@@ -268,6 +270,7 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format, proces
             elem = truncate(elem, v_format_precision) # por que se quiere truncar acá?
 
         image_data[i*n: i*n+n, j*n: j*n+n, k] = output_vector.reshape((n, n)) # reescribir esta linea para el caso generalizado de bloques
+        print(f"block {block}")
     return image_data
 
     # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
@@ -281,13 +284,11 @@ def decode(input_file, output_file):
         #En particular, la variable  A_id la borré de todo el código
 
         # leer cantidad de particiones donde se hace omp
-        # (numero de hojas, si vemos las particiones como un arbol)
-        # Go to the end of the file and read the last integer
-        file.seek(-4, 2)  # Move to the last 4 bytes (size of unsigned int)
+        # go to the end of the file and read the last integer
+        file.seek(-4, 2)  # move to the last 4 bytes (size of unsigned int)
         processed_blocks = file.read("I")
         #print(f"processed_blocks = {processed_blocks}")
         file.seek(0) # Now, seek back to the start to read the rest of the data
-
         
         magic_number_read, version, w, h, depth, A_id, basis_index, min_n, max_n = file.read(header_format)
         #print(f"header: {magic_number_read}, {version}, {w}, {h}, {depth}, {A_id}, {basis_index}, {min_n}, {max_n}")
@@ -309,6 +310,7 @@ def decode(input_file, output_file):
 
         image = Image.fromarray(image_data.astype('uint8'))
         image.save(output_file)
+        print("Output file saved to: " + output_file)
 
 ###
 

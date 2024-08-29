@@ -30,16 +30,16 @@ class RawFile:
 
     def read(self, fmt):
         """Read data with format fmt and unpack"""
-        print(f"fmt = {fmt}")
+        #print(f"fmt = {fmt}")
         if fmt != "n":
             fmt = "!" + fmt
             size = calcsize(fmt)
             data = self.file.read(size)
             udata = unpack(fmt, data)
 
-            print(f"size read: {size}")
-            print(f"data read: {data}")
-            print(f"udata read: {udata}")
+            #print(f"size read: {size}")
+            #print(f"data read: {data}")
+            #print(f"udata read: {udata}")
             return [u.decode('utf-8') if isinstance(u, bytes) else u for u in udata] if len(udata) > 1 else udata[0]
         else:
             raise ValueError("fmt = n. Not implemented.")
