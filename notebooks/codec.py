@@ -9,7 +9,7 @@ from scipy.sparse import csc_matrix
 import zlib
 from rawfile import RawFile
 
-min_n = 2**3
+min_n = 2**4
 max_n = 2**5
 a_cols = 256
 fif_version = 2
@@ -34,7 +34,35 @@ def quantize(array, v_format):
         elem = truncate(elem, v_format)
     return array
 
-def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, basis_index, n, k, stats, ssim_stop, min_n, max_n, callback):
+def _omp_code_recursive(size_block, i, j, k, image_data, omp_dict, min_n, max_error, x_list, channel_processed_blocks):
+    from_dim0 = i * size_block
+    from_dim1 = j * size_block
+    sub_image_data = sub_image(image_data, size_block, from_dim0, from_dim1)
+
+    sub_image_data = sub_image_data.flatten()
+    dict_ = omp_dict.get(size_block)
+    if dict_.shape[1] > sub_image_data.size:
+        dict_ = dict_[:, :sub_image_data.size]
+
+    omp = OrthogonalMatchingPursuit(n_nonzero_coefs= min(dict_.shape[1], image_data.size), fit_intercept=False)
+    omp.fit(dict_, sub_image_data)
+    coefs = omp.coef_
+    
+    #print(f"max_error {max_error}")
+    if np.linalg.norm(coefs, 0) >= min_sparcity(max_error, size_block) and size_block > min_n:
+        for x_init, y_init in [(x, y) for x in [0,int(size_block/2)] for y in [0,int(size_block/2)]]:
+            channel_processed_blocks, x_list = _omp_code_recursive(int(size_block/2), i + x_init, j + y_init, k, image_data,
+                                                                   omp_dict, min_n, max_error, x_list,
+                                                                   channel_processed_blocks
+                                                                   )
+        
+    else:
+        channel_processed_blocks += 1
+        x_list.append((size_block, i, j, k, coefs))
+    return channel_processed_blocks, x_list
+
+
+def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, basis_index, n, k, stats, ssim_stop, min_n, callback):
     """ Process channel of image using Matching Pursuit. """
     """ The vector of coefficients 'coefs' is computed. """
     channel_processed_blocks = 0
@@ -42,27 +70,14 @@ def _omp_code(x_list, image_data, im_rec, omp_dict, max_error, basis_index, n, k
     size_block = n
     for i in range(image_data.shape[0] // size_block):
         for j in range(image_data.shape[1] // size_block):
-            # get subimage from 'image_data'
-            from_dim0 = i * size_block
-            from_dim1 = j * size_block
-            sub_image_data = sub_image(image_data, size_block, from_dim0, from_dim1)
-
-            sub_image_data = sub_image_data.flatten()
-
-            dict_ = omp_dict.get(n)
-
-            if dict_.shape[1] > sub_image_data.size:
-                dict_ = dict_[:, :sub_image_data.size]
-
-            # print(f"dict.shape: {dict_.shape}, sub_image_data.shape{sub_image_data.shape}")
-
-            # Perform OMP on the block
-            omp = OrthogonalMatchingPursuit(n_nonzero_coefs= min(dict_.shape[1], image_data.size), fit_intercept=False)
-            omp.fit(dict_, sub_image_data)
-            coefs = omp.coef_
-            x_list.append((n, i, j, k, coefs)) 
-            channel_processed_blocks += 1
+            channel_processed_blocks, x_list = _omp_code_recursive(size_block, i, j, k, image_data, omp_dict,
+                                         min_n, max_error, x_list, channel_processed_blocks)
     return channel_processed_blocks, x_list
+
+    #     _omp_code_recursive(n/2, i+n/2, j    , k, image_data, omp_dict, min_n, max_error)
+    #     _omp_code_recursive(n/2, i    , j+n/2, k, image_data, omp_dict, min_n, max_error)
+    #     _omp_code_recursive(n/2, i+n/2, j+n/2, k, image_data, omp_dict, min_n, max_error)
+
 
     # líneas para probar los resultados antes de pasarlos a binario en '_omp_code':
     # # pred = np.dot(dict_, coefs) + omp.intercept_
@@ -101,18 +116,18 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
         # STEP 1 - OMP ###########################
         image_data = np.array(image.getdata()).reshape(h, w, depth)
         stats = {}
-        processed_blocks = 0
 
         # Initialize dictionary of sparse vectors for the whole image
         omp_dict = {}
+        n_aux = min_n
+        while n_aux <= max_n:
+            A = DCT1_Haar1_qt(n_aux * n_aux, a_cols)
+            print(f"Initializing omp_dict[{n_aux}] with matrix A of shape {A.shape}")
+            omp_dict[n_aux] = A
+            n_aux *= 2
+
+        processed_blocks = 0
         n = max_n
-
-        # while n <= max_n: lo hacemos para un solo 'n'
-        A = DCT1_Haar1_qt(n * n, a_cols)
-        print(f"Initializing omp_dict[{n}] with matrix A of shape {A.shape}")
-        omp_dict[n] = A
-        #n *= 2
-
         x_list = []
         # Process each color channel of the entire image
         for k in range(depth):
@@ -127,7 +142,6 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
                                    stats = stats,
                                    ssim_stop = ssim_stop,
                                    min_n = min_n,
-                                   max_n = max_n,
                                    callback = callback
                                    )
             processed_blocks += channel_processed_blocks
@@ -145,6 +159,28 @@ def code(input_file, output_file, max_error, basis_index, min_n=min_n, max_n=max
         f.write("I", processed_blocks) # write number of processed_blocks
         bytes_written = f.tell()
         print(f"bytes_written: {bytes_written}")
+
+    # # save image before writing in binary format
+    # image_data_test = np.zeros((h, w, depth), dtype=np.float32)
+    # image_data_test_channel_shape = image_data_test[:, :, 0].shape
+    # idx = 0
+    # for _, x in x_list:
+    #     print(x)
+    #     output_vector_test = np.dot(A, x) # + omp.intercept_
+    #     print(f"output_vector_test {output_vector_test}")
+    #     image_data_test[:, :, idx] = output_vector_test.reshape(image_data_test_channel_shape)
+    #     idx+=1
+    # #print(image_data.shape, image_data_test.shape)
+    # similarity_index = ssim(image_data_test,
+    #                         image_data,
+    #                         data_range=image_data.max() - image_data.min(),
+    #                         channel_axis=2
+    #                         )
+    # print(f"ssim all channels = {similarity_index}")
+    # image_data_test = YCbCr_to_RGB(image_data_test) # por que no usar .convert('RGB') de clase Image?
+    # image_data_test = Image.fromarray(image_data_test.astype('uint8'))
+    # image_data_test.save("lenna_test_1.png")
+    ##
 
     return bytes_written, raw_size, processed_blocks
 
@@ -245,7 +281,15 @@ def read_vector(file):
 def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format, processed_blocks):
     """OMP decoder for the entire channel"""
     
-    A = DCT1_Haar1_qt(n * n, a_cols) #
+
+    # Initialize dictionary of sparse vectors for the whole image
+    omp_dict = {}
+    n_aux = min_n
+    while n_aux <= max_n:
+        A = DCT1_Haar1_qt(n_aux * n_aux, a_cols)
+        print(f"Initializing omp_dict[{n_aux}] with matrix A of shape {A.shape}")
+        omp_dict[n_aux] = A
+        n_aux *= 2
 
     # no necesito saber como esta particionada la imagen. solo necesito saber la cantidad de bloques.
     for block in range(processed_blocks):
@@ -257,8 +301,8 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format, proces
         n = file.read("B") # ancho y largo del bloque. ver si esta bien que siempre sea "B".
         #print("variables del bloque ",i, j, k, n)
 
-        # hacer dict si no está definido
- 
+        A = omp_dict[n]
+
         # Read the vector x from the file
         x = np.array(read_vector(file))
         output_vector = np.dot(A, x)
@@ -270,7 +314,7 @@ def _omp_decode(file, image_data, basis_index, n, min_n, max_n, v_format, proces
             elem = truncate(elem, v_format_precision) # por que se quiere truncar acá?
 
         image_data[i*n: i*n+n, j*n: j*n+n, k] = output_vector.reshape((n, n)) # reescribir esta linea para el caso generalizado de bloques
-        print(f"block {block}")
+        #print(f"block {block}")
     return image_data
 
     # Reconstruct the image data (c_inv still not defined. Found in biyections.py)
