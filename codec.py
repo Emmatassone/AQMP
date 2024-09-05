@@ -6,7 +6,8 @@ from PIL import Image
 
 
 class ImageCompressor:
-    def __init__(self, min_n, max_n, a_cols, fif_version, magic_number, header_format, v_format_precision):
+    def __init__(self, min_sparcity, min_n, max_n, a_cols, fif_version, magic_number, header_format, v_format_precision, max_error):
+        self.min_sparcity = min_sparcity
         self.min_n = min_n
         self.max_n = max_n
         self.a_cols = a_cols
@@ -14,10 +15,11 @@ class ImageCompressor:
         self.magic_number = magic_number
         self.header_format = header_format
         self.v_format_precision = v_format_precision
-        self.omp_handler = OMPHandler(self.min_n, self.max_n, self.a_cols)
+        self.max_error = max_error
+        self.omp_handler = OMPHandler(self.min_n, self.max_n, self.a_cols, self.min_sparcity)
         self.omp_handler.initialize_dictionary()
 
-    def code(self, input_file, output_file, max_error):
+    def code(self, input_file, output_file): # quedaria mejor llamar a la funcion 'encode'?
         """Compress input_file with the given parameters into output_file"""
         image = Image.open(input_file)
         image = image.convert('YCbCr')
@@ -50,7 +52,7 @@ class ImageCompressor:
                 channel_processed_blocks, x_list = self.omp_handler.omp_code(
                                                                         x_list = x_list,
                                                                         image_data = image_data[:, :, k],
-                                                                        max_error = max_error,
+                                                                        max_error = self.max_error,
                                                                         block_size = n,
                                                                         k = k,
                                                                         )

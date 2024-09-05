@@ -1,13 +1,14 @@
+import numpy as np
 from sklearn.linear_model import OrthogonalMatchingPursuit
 from utility import Utility
-import numpy as np
 from basis import BasisFunctions
 
 class OMPHandler:
-    def __init__(self, min_n, max_n, a_cols):
+    def __init__(self, min_n, max_n, a_cols, min_sparcity):
         self.min_n = min_n
         self.max_n = max_n
         self.a_cols = a_cols
+        self.min_sparcity = min_sparcity
         self.omp_dict = {}
         self.basis_functions = BasisFunctions() 
 
@@ -49,7 +50,7 @@ class OMPHandler:
         omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(dict_.shape[1], image_data.size), fit_intercept=False)
         omp.fit(dict_, sub_image_data)
         coefs = omp.coef_
-        if np.linalg.norm(coefs, 0) > 1 and block_size > self.min_n: # norm0 >= Utility.min_sparcity(max_error, block_size)
+        if np.linalg.norm(coefs, 0) > self.min_sparcity and block_size > self.min_n: # norm0 >= Utility.min_sparcity(max_error, block_size)
             #print("partitioning")
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
                 channel_processed_blocks, x_list = self.omp_code_recursive(
