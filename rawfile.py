@@ -59,13 +59,9 @@ class RawFile:
     def write_header(self, header_format, *args):
         self.write(header_format, *args)
 
-    def write_vector(self, x, v_format):
+    def write_vector(self, x, x_norm_0, v_format):
         """ Write a sparse vector as a list of pairs (pos, value)"""
-        x = Utility.quantize(x, v_format)
-        x_norm_0 = np.linalg.norm(x, 0)
-
         self.write("B", int(x_norm_0))
-
         position_format = "B" if len(x) <= 256 else "H"
         if x_norm_0 > 0:
             for position, value in enumerate(x):

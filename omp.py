@@ -50,7 +50,8 @@ class OMPHandler:
         omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(dict_.shape[1], image_data.size), fit_intercept=False)
         omp.fit(dict_, sub_image_data)
         coefs = omp.coef_
-        if np.linalg.norm(coefs, 0) > self.min_sparcity and block_size > self.min_n: # norm0 >= Utility.min_sparcity(max_error, block_size)
+        norm_0_coefs = np.linalg.norm(coefs, 0)
+        if norm_0_coefs > self.min_sparcity and block_size > self.min_n: # norm0 >= Utility.min_sparcity(max_error, block_size)
             #print("partitioning")
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
                 channel_processed_blocks, x_list = self.omp_code_recursive(
@@ -63,14 +64,13 @@ class OMPHandler:
 
         return channel_processed_blocks, x_list
     
-    def omp_decode(self, file, image_data, n_aux , v_format_precision, processed_blocks):
+    def omp_decode(self, file, image_data, v_format_precision, processed_blocks):
         """OMP decoder for the entire channel"""
-        for block in range(processed_blocks):
+        for _ in range(processed_blocks):
             i = file.read("H")
             j = file.read("H")
             k = file.read("B")
             n = file.read("B")
-
             # print("i,j,k,n:", i,j,k,n)
 
             A = self.omp_dict[n]

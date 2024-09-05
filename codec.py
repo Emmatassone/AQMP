@@ -19,13 +19,16 @@ class ImageCompressor:
         self.omp_handler = OMPHandler(self.min_n, self.max_n, self.a_cols, self.min_sparcity)
         self.omp_handler.initialize_dictionary()
 
-    def code(self, input_file, output_file): # quedaria mejor llamar a la funcion 'encode'?
+    def encode(self, input_file, output_file):
         """Compress input_file with the given parameters into output_file"""
+        
         image = Image.open(input_file)
         image = image.convert('YCbCr')
         w, h = image.size
         depth = Utility.mode_to_bpp(image.mode) // 8
         self.image_rawsize = w * h * depth
+        self.processed_blocks = 0
+        self.non_zero_coefs = 0
 
         with RawFile(output_file, 'wb') as file:
             # print(self.header_format, self.magic_number, self.fif_version, w, h, depth, 0, 0, self.min_n, self.max_n,"\n")
@@ -45,31 +48,37 @@ class ImageCompressor:
 
             image_data = np.array(image.getdata()).reshape(h, w, depth)
 
-            processed_blocks = 0
             n = self.max_n
             x_list = []
             for k in range(depth):
                 channel_processed_blocks, x_list = self.omp_handler.omp_code(
-                                                                        x_list = x_list,
-                                                                        image_data = image_data[:, :, k],
-                                                                        max_error = self.max_error,
-                                                                        block_size = n,
-                                                                        k = k,
-                                                                        )
-                processed_blocks += channel_processed_blocks
-
+                                                    x_list = x_list,
+                                                    image_data = image_data[:, :, k],
+                                                    max_error = self.max_error,
+                                                    block_size = n,
+                                                    k = k,
+                                                    )
+                self.processed_blocks += channel_processed_blocks
+            
             for n, i, j, k, x in x_list:
                 file.write("H", i)
                 file.write("H", j)
                 file.write("B", k)
                 file.write("B", n)
-                file.write_vector(x.tolist(), self.v_format_precision)
+
+                x = Utility.quantize(x, self.v_format_precision).tolist()
+                x_norm_0 = np.linalg.norm(x, 0)
+                self.non_zero_coefs += x_norm_0
+
+                file.write_vector(x, x_norm_0, self.v_format_precision)
                 # print("i, j, k, n: ", i, j, k, n)
-            file.write("I", processed_blocks)
+            
+            file.write("I", self.processed_blocks)
 
             bytes_written = file.tell()
-            print(f"bytes_written: {bytes_written}")
-            print(f"processed_blocks: {processed_blocks}")
+
+        print(f"bytes_written: {bytes_written}")
+        print(f"processed_blocks: {self.processed_blocks}")
 
     def decode(self, input_file, output_file):
         """Decompress input_file into output_file"""
@@ -90,12 +99,10 @@ class ImageCompressor:
                 raise Exception(f"Invalid codec version: {version}. Expected: {self.fif_version}")
 
             image_data = np.zeros((h, w, depth), dtype = np.float32)
-            image_data = self.omp_handler.omp_decode(
-                                                      file,
-                                                      image_data,
-                                                      self.max_n,
-                                                      self.v_format_precision,
-                                                      processed_blocks
+            image_data = self.omp_handler.omp_decode(file,
+                                                     image_data,
+                                                     self.v_format_precision,
+                                                     processed_blocks
                                                     )
 
             if depth == 1:
