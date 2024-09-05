@@ -28,7 +28,9 @@ class OMPHandler:
             for j in range(image_data.shape[1] // block_size):
                 channel_processed_blocks, x_list = self.omp_code_recursive(
                                                                             block_size,
-                                                                            i, j, k,
+                                                                            i*block_size,
+                                                                            j*block_size,
+                                                                            k,
                                                                             image_data,
                                                                             max_error,
                                                                             x_list,
@@ -36,9 +38,7 @@ class OMPHandler:
                                                                         )
         return channel_processed_blocks, x_list
 
-    def omp_code_recursive(self, block_size, i, j, k, image_data, max_error, x_list, channel_processed_blocks):
-        from_dim0 = i * block_size
-        from_dim1 = j * block_size
+    def omp_code_recursive(self, block_size, from_dim0, from_dim1, k, image_data, max_error, x_list, channel_processed_blocks):
         sub_image_data = Utility.sub_image(image_data, block_size, from_dim0, from_dim1)
 
         sub_image_data = sub_image_data.flatten()
@@ -49,30 +49,33 @@ class OMPHandler:
         omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(dict_.shape[1], image_data.size), fit_intercept=False)
         omp.fit(dict_, sub_image_data)
         coefs = omp.coef_
-
-        if np.linalg.norm(coefs, 0) >= Utility.min_sparcity(max_error, block_size) and block_size > self.min_n:
+        if np.linalg.norm(coefs, 0) > 1 and block_size > self.min_n: # norm0 >= Utility.min_sparcity(max_error, block_size)
+            #print("partitioning")
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
                 channel_processed_blocks, x_list = self.omp_code_recursive(
-                    int(block_size / 2), i + x_init, j + y_init, k, image_data,
+                    int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k, image_data,
                     max_error, x_list, channel_processed_blocks
                 )
         else:
             channel_processed_blocks += 1
-            x_list.append((block_size, i, j, k, coefs))
+            x_list.append((block_size, from_dim0, from_dim1, k, coefs))
 
         return channel_processed_blocks, x_list
     
     def omp_decode(self, file, image_data, n_aux , v_format_precision, processed_blocks):
         """OMP decoder for the entire channel"""
         for block in range(processed_blocks):
-            i = file.read("B")
-            j = file.read("B")
+            i = file.read("H")
+            j = file.read("H")
             k = file.read("B")
             n = file.read("B")
-            A = self.omp_dict[n_aux]
+
+            # print("i,j,k,n:", i,j,k,n)
+
+            A = self.omp_dict[n]
             x = np.array(file.read_vector(self.a_cols))
             output_vector = np.dot(A, x)
             for elem in output_vector:
                 elem = Utility.truncate(elem, v_format_precision)
-            image_data[i*n: i*n+n, j*n: j*n+n, k] = output_vector.reshape((n, n))
+            image_data[i:i+n, j:j+n, k] = output_vector.reshape((n, n))
         return image_data

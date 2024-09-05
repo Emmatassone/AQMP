@@ -26,6 +26,8 @@ class ImageCompressor:
         self.image_rawsize = w * h * depth
 
         with RawFile(output_file, 'wb') as file:
+            # print(self.header_format, self.magic_number, self.fif_version, w, h, depth, 0, 0, self.min_n, self.max_n,"\n")
+
             file.write_header(
                 self.header_format,
                 self.magic_number,
@@ -55,13 +57,17 @@ class ImageCompressor:
                 processed_blocks += channel_processed_blocks
 
             for n, i, j, k, x in x_list:
-                file.write("B", n)
-                file.write("B", i)
-                file.write("B", j)
+                file.write("H", i)
+                file.write("H", j)
                 file.write("B", k)
+                file.write("B", n)
                 file.write_vector(x.tolist(), self.v_format_precision)
-
+                # print("i, j, k, n: ", i, j, k, n)
             file.write("I", processed_blocks)
+
+            bytes_written = file.tell()
+            print(f"bytes_written: {bytes_written}")
+            print(f"processed_blocks: {processed_blocks}")
 
     def decode(self, input_file, output_file):
         """Decompress input_file into output_file"""
@@ -69,9 +75,11 @@ class ImageCompressor:
             file.seek(-4, 2)
             processed_blocks = file.read("I")
             file.seek(0)
+            # print("processed_blocks:",processed_blocks)
             #No es necesario ya que la clase guarda estos parámetros
             #A_id, basis_index = 0, 0 (to be removed)
             magic_number_read, version, w, h, depth, A_id, basis_index, min_n, max_n = file.read(self.header_format)
+            # print(magic_number_read, version, w, h, depth, A_id, basis_index, min_n, max_n)
 
             if magic_number_read != self.magic_number.decode('utf-8'):
                 raise Exception(f"Invalid image format: Wrong magic number '{magic_number_read}'")
