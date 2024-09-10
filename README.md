@@ -11,4 +11,4 @@ Código para Adaptive Quadtree Refinement and Matching Pursuit (AQMP)
    - [ ] Non-orthogonal basis functions: Gabor wavelets or curvelets.
 - [ ] Test different compression levels with sparsity parameter.
 - [ ] Implement DEFLATE function from zlib to see check if there are changes in the SSIM index.
-- [ ] Extend to video compressive sensing [https://www.mdpi.com/2076-3417/12/5/2734]
+- [ ] Extend to video compressive sensing (2nd paper?) [https://www.mdpi.com/2076-3417/12/5/2734]
