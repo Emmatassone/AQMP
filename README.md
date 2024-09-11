@@ -15,3 +15,4 @@ Código para Adaptive Quadtree Refinement and Matching Pursuit (AQMP)
 
 # Example Diagram:
 
+![Algorithm Example](./images/flow_diagram.png)
