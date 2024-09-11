@@ -12,3 +12,6 @@ Código para Adaptive Quadtree Refinement and Matching Pursuit (AQMP)
 - [ ] Test different compression levels with sparsity parameter.
 - [ ] Implement DEFLATE function from zlib to see check if there are changes in the SSIM index.
 - [ ] Extend to video compressive sensing (2nd paper?) [https://www.mdpi.com/2076-3417/12/5/2734]
+
+# Example Diagram:
+
