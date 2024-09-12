@@ -15,7 +15,7 @@ class ImageCompressor:
         self.magic_number = magic_number
         self.header_format = header_format
         self.v_format_precision = v_format_precision
-        self.max_error = max_error
+        self.max_error = max_error # no usado hasta ahora
         self.omp_handler = OMPHandler(self.min_n, self.max_n, self.a_cols, self.min_sparcity)
         self.omp_handler.initialize_dictionary()
 
@@ -23,10 +23,10 @@ class ImageCompressor:
         """Compress input_file with the given parameters into output_file"""
         
         image = Image.open(input_file)
-        image = image.convert('YCbCr')
+        image = image.convert('YCbCr') # por que esta eleccion en lugar de RGB?
         w, h = image.size
         depth = Utility.mode_to_bpp(image.mode) // 8
-        self.image_rawsize = w * h * depth
+        self.image_rawsize = w * h * depth # no usado hasta ahora
         self.processed_blocks = 0
         self.non_zero_coefs = 0
 
@@ -110,7 +110,6 @@ class ImageCompressor:
                 image_data[:, :, 2] = image_data[:, :, 0]
 
             image_data = Utility.ycbcr_to_rgb(image_data)
-
             image = Image.fromarray(image_data.astype('uint8'))
             image.save(output_file)
             print("Output file saved to: " + output_file)

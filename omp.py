@@ -45,9 +45,10 @@ class OMPHandler:
         sub_image_data = sub_image_data.flatten()
         dict_ = self.omp_dict.get(block_size)
 
-        if dict_.shape[1] > sub_image_data.size:
+        if dict_.shape[1] > sub_image_data.size: # para que sirve este if?
             dict_ = dict_[:, :sub_image_data.size]
 
+        # n_nonzero_coefs = min(dict_.shape[1], image_data.size) por que?
         omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(dict_.shape[1], image_data.size), fit_intercept=False)
         omp.fit(dict_, sub_image_data)
         coefs = omp.coef_
@@ -64,7 +65,23 @@ class OMPHandler:
             x_list.append((block_size, from_dim0, from_dim1, k, coefs))
 
         return channel_processed_blocks, x_list
-    
+
+    def omp_decode(self, file, image_data, v_format_precision, processed_blocks):
+        """OMP decoder for the entire channel"""
+        for _ in range(processed_blocks):
+            i = file.read("H")
+            j = file.read("H")
+            k = file.read("B")
+            n = file.read("B")
+            # print("i,j,k,n:", i,j,k,n)
+
+            A = self.omp_dict[n]
+            coefs = np.array(file.read_vector(self.a_cols))
+            output_vector = np.dot(A, coefs)
+            for elem in output_vector:
+                elem = Utility.truncate(elem, v_format_precision)
+            image_data[i:i+n, j:j+n, k] = output_vector.reshape((n, n))
+        return image_data
 
     # def omp_code_recursive2(self, block_size, from_dim0, from_dim1, k, image_data, max_error, x_list, channel_processed_blocks):
     #     sub_image_data = Utility.sub_image(image_data, block_size, from_dim0, from_dim1)
@@ -103,20 +120,3 @@ class OMPHandler:
     #         x_list.append((block_size, from_dim0, from_dim1, k, coefs))
 
     #     return channel_processed_blocks, x_list
-    
-    def omp_decode(self, file, image_data, v_format_precision, processed_blocks):
-        """OMP decoder for the entire channel"""
-        for _ in range(processed_blocks):
-            i = file.read("H")
-            j = file.read("H")
-            k = file.read("B")
-            n = file.read("B")
-            # print("i,j,k,n:", i,j,k,n)
-
-            A = self.omp_dict[n]
-            x = np.array(file.read_vector(self.a_cols))
-            output_vector = np.dot(A, x)
-            for elem in output_vector:
-                elem = Utility.truncate(elem, v_format_precision)
-            image_data[i:i+n, j:j+n, k] = output_vector.reshape((n, n))
-        return image_data
