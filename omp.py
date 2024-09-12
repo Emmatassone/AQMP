@@ -45,7 +45,6 @@ class OMPHandler:
         sub_image_data = sub_image_data.flatten()
         dict_ = self.omp_dict.get(block_size)
 
-        #Always use the first half of the dictionary (TO CORRECT)
         if dict_.shape[1] > sub_image_data.size:
             dict_ = dict_[:, :sub_image_data.size]
 
@@ -56,44 +55,6 @@ class OMPHandler:
         if norm_0_coefs > self.min_sparcity and block_size > self.min_n: # norm0 >= Utility.min_sparcity(max_error, block_size)
             #print("partitioning")
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
-                channel_processed_blocks, x_list = self.omp_code_recursive2(
-                    int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k, image_data,
-                    max_error, x_list, channel_processed_blocks
-                )
-        else:
-            channel_processed_blocks += 1
-            x_list.append((block_size, from_dim0, from_dim1, k, coefs))
-
-        return channel_processed_blocks, x_list
-    
-    def omp_code_recursive2(self, block_size, from_dim0, from_dim1, k, image_data, max_error, x_list, channel_processed_blocks):
-        sub_image_data = Utility.sub_image(image_data, block_size, from_dim0, from_dim1)
-
-        sub_image_data = sub_image_data.flatten()
-        dict_ = self.omp_dict.get(block_size)
-
-        # New block code
-        dict_rows = block_size * block_size
-        dict_cols = self.a_cols
-
-        row_start = (from_dim0 // (dict_rows // 2)) * (dict_rows // 2)
-        row_end = row_start + (dict_rows // 2)
-        col_start = (from_dim1 // (dict_cols // 2)) * (dict_cols // 2)
-        col_end = col_start + (dict_cols // 2)
-
-        dict_part = dict_[row_start:row_end, col_start:col_end]
-
-        # Continues as in old code
-        if dict_part.shape[1] > sub_image_data.size:
-            dict_part = dict_part[:, :sub_image_data.size]
-
-        omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(dict_part.shape[1], image_data.size), fit_intercept=False)
-        omp.fit(dict_part, sub_image_data)
-        coefs = omp.coef_
-        norm_0_coefs = np.linalg.norm(coefs, 0)
-        if norm_0_coefs > self.min_sparcity and block_size > self.min_n: 
-            # Partition the subimage if the norm is above sparsity threshold and block size is still greater than the minimum
-            for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
                 channel_processed_blocks, x_list = self.omp_code_recursive(
                     int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k, image_data,
                     max_error, x_list, channel_processed_blocks
@@ -103,6 +64,45 @@ class OMPHandler:
             x_list.append((block_size, from_dim0, from_dim1, k, coefs))
 
         return channel_processed_blocks, x_list
+    
+
+    # def omp_code_recursive2(self, block_size, from_dim0, from_dim1, k, image_data, max_error, x_list, channel_processed_blocks):
+    #     sub_image_data = Utility.sub_image(image_data, block_size, from_dim0, from_dim1)
+
+    #     sub_image_data = sub_image_data.flatten()
+    #     dict_ = self.omp_dict.get(block_size)
+
+    #     # New block code
+    #     dict_rows = block_size * block_size
+    #     dict_cols = self.a_cols
+
+    #     row_start = (from_dim0 // (dict_rows // 2)) * (dict_rows // 2)
+    #     row_end = row_start + (dict_rows // 2)
+    #     col_start = (from_dim1 // (dict_cols // 2)) * (dict_cols // 2)
+    #     col_end = col_start + (dict_cols // 2)
+
+    #     dict_part = dict_[row_start:row_end, col_start:col_end]
+
+    #     # Continues as in old code
+    #     if dict_part.shape[1] > sub_image_data.size:
+    #         dict_part = dict_part[:, :sub_image_data.size]
+
+    #     omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(dict_part.shape[1], image_data.size), fit_intercept=False)
+    #     omp.fit(dict_part, sub_image_data)
+    #     coefs = omp.coef_
+    #     norm_0_coefs = np.linalg.norm(coefs, 0)
+    #     if norm_0_coefs > self.min_sparcity and block_size > self.min_n: 
+    #         # Partition the subimage if the norm is above sparsity threshold and block size is still greater than the minimum
+    #         for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
+    #             channel_processed_blocks, x_list = self.omp_code_recursive(
+    #                 int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k, image_data,
+    #                 max_error, x_list, channel_processed_blocks
+    #             )
+    #     else:
+    #         channel_processed_blocks += 1
+    #         x_list.append((block_size, from_dim0, from_dim1, k, coefs))
+
+    #     return channel_processed_blocks, x_list
     
     def omp_decode(self, file, image_data, v_format_precision, processed_blocks):
         """OMP decoder for the entire channel"""
