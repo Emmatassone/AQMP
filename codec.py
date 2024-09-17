@@ -6,18 +6,25 @@ from PIL import Image
 
 
 class ImageCompressor:
-    def __init__(self, min_sparcity, min_n, max_n, a_cols, fif_version, magic_number, header_format, v_format_precision, max_error):
+    def __init__(self, min_sparcity, min_n, max_n, a_cols, max_error, wavelet_election = 'db1', shuffle_dictionary = False):
+        #Algorithm Parameters 
         self.min_sparcity = min_sparcity
         self.min_n = min_n
         self.max_n = max_n
         self.a_cols = a_cols
-        self.fif_version = fif_version
-        self.magic_number = magic_number
-        self.header_format = header_format
-        self.v_format_precision = v_format_precision
         self.max_error = max_error # no usado hasta ahora
+        
+        #File Format parameters (No son más argumentos de la clase)
+        self.fif_version = 2
+        self.magic_number = b'FIF' # Ensure this is a bytes object
+        self.header_format = '3sBiiBBBBB'
+        self.v_format_precision = "f" 
+        
         self.omp_handler = OMPHandler(self.min_n, self.max_n, self.a_cols, self.min_sparcity)
-        self.omp_handler.initialize_dictionary()
+        self.omp_handler.initialize_dictionary2(
+                                                wavelet_election = wavelet_election,
+                                                shuffle = shuffle_dictionary
+                                                )
 
     def encode(self, input_file, output_file):
         """Compress input_file with the given parameters into output_file"""
@@ -31,7 +38,6 @@ class ImageCompressor:
         self.non_zero_coefs = 0
 
         with RawFile(output_file, 'wb') as file:
-            # print(self.header_format, self.magic_number, self.fif_version, w, h, depth, 0, 0, self.min_n, self.max_n,"\n")
 
             file.write_header(
                 self.header_format,
