@@ -24,6 +24,7 @@ class OMPHandler:
         while n_aux <= self.max_n:
             A = self.basis_functions.DCT1_Haar1_qt(n_aux * n_aux, self.a_cols)
             self.omp_dict[n_aux] = A
+            #print(f"A.shape: {A.shape}")
             n_aux *= 2
     
     def initialize_dictionary2(self, wavelet_election = 'db1', shuffle = False):
@@ -58,15 +59,22 @@ class OMPHandler:
         sub_image_data = sub_image_data.flatten()
         dict_ = self.omp_dict.get(block_size)
 
-        if dict_.shape[1] > sub_image_data.size:
-            dict_ = dict_[:, :sub_image_data.size]
+        # if dict_.shape[1] > sub_image_data.size:
+        #     dict_ = dict_[:, :sub_image_data.size]
 
-        omp = OrthogonalMatchingPursuit(n_nonzero_coefs=min(dict_.shape[1], image_data.size), fit_intercept=False)
+        a_cols = dict_.shape[1]
+        n_nonzero_coefs = int(a_cols)
+        print("hyperparameter n_nonzero_coefs:", n_nonzero_coefs)
+        omp = OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, fit_intercept=False) # min(dict_.shape[1], image_data.size)
         omp.fit(dict_, sub_image_data)
         coefs = omp.coef_
-        norm_0_coefs = np.linalg.norm(coefs, 0)
+        norm_0_coefs = np.linalg.norm(coefs, 0) # n_nonzero_coefs_ de sklearn
+        print("norm_0_coefs using linalg:", norm_0_coefs)
+        print("n_nonzero_coefs_ with scikit:", omp.n_nonzero_coefs_)
+        print("coefs:", coefs, coefs.shape)
 
-        
+        assert int(norm_0_coefs) == omp.n_nonzero_coefs_
+
         current_node = Node(f"Block_{block_size}_{from_dim0}_{from_dim1}", parent=parent)
 
         if norm_0_coefs > self.min_sparcity and block_size > self.min_n:
@@ -88,7 +96,7 @@ class OMPHandler:
             j = file.read("H")
             k = file.read("B")
             n = file.read("B")
-
+            #print("i,j,k,n", i,j,k,n)
             A = self.omp_dict[n]
             coefs = np.array(file.read_vector(self.a_cols))
             output_vector = np.dot(A, coefs)
