@@ -21,9 +21,9 @@ class ImageCompressor:
         self.v_format_precision = "f" 
         
         self.omp_handler = OMPHandler(self.min_n, self.max_n, self.a_cols, self.min_sparcity)
-        self.omp_handler.initialize_dictionary2(
-                                                wavelet_election = wavelet_election,
-                                                shuffle = shuffle_dictionary
+        self.omp_handler.initialize_dictionary(
+                                                #wavelet_election = wavelet_election,
+                                                #shuffle = shuffle_dictionary
                                                 )
 
     def encode(self, input_file, output_file):
