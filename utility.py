@@ -31,9 +31,9 @@ class Utility:
             raise ValueError(f"Unsupported image mode: {mode}")
 
     @staticmethod
-    def min_sparcity(max_error, N):
-        """Calculate minimum sparsity based on max_error and block size N."""
-        return int(np.ceil(max_error * N**2))
+    def min_sparcity(min_sparcity_rate, n):
+        """Calculate minimum sparsity based on max_error and block size n."""
+        return min_sparcity_rate * n**2
     
     @staticmethod
     def sub_image(image_data, n, i, j, k=None):
