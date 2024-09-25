@@ -9,11 +9,12 @@ from utility import Utility
 from basis import BasisFunctions
 from anytree import Node, RenderTree, PreOrderIter
 class OMPHandler:
-    def __init__(self, min_n, max_n, a_cols, min_sparcity):
+    def __init__(self, min_n, max_n, a_cols, min_sparcity, max_error):
         self.min_n = min_n
         self.max_n = max_n
         self.a_cols = a_cols
         self.min_sparcity = min_sparcity
+        self.max_error = max_error
         self.omp_dict = {}
         self.basis_functions = BasisFunctions()
         self.subdivision_tree = None  
@@ -62,22 +63,21 @@ class OMPHandler:
         # if dict_.shape[1] > sub_image_data.size:
         #     dict_ = dict_[:, :sub_image_data.size]
 
-        a_cols = dict_.shape[1]
-        n_nonzero_coefs = int(a_cols)
-        print("hyperparameter n_nonzero_coefs:", n_nonzero_coefs)
-        omp = OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, fit_intercept=False) # min(dict_.shape[1], image_data.size)
+        #n_nonzero_coefs = int(dict_.shape[1]) # se puede agregar como paraemtro libre para cbuscar con optuna el error de omp en vez de esto
+        #print("hyperparameter n_nonzero_coefs:", n_nonzero_coefs)
+        omp = OrthogonalMatchingPursuit(tol=self.max_error, fit_intercept=False) # min(dict_.shape[1], image_data.size)
         omp.fit(dict_, sub_image_data)
         coefs = omp.coef_
         norm_0_coefs = np.linalg.norm(coefs, 0) # n_nonzero_coefs_ de sklearn
         print("norm_0_coefs using linalg:", norm_0_coefs)
         print("n_nonzero_coefs_ with scikit:", omp.n_nonzero_coefs_)
-        print("coefs:", coefs, coefs.shape)
+        #print("coefs:", coefs, coefs.shape)
 
-        assert int(norm_0_coefs) == omp.n_nonzero_coefs_
+        #assert int(norm_0_coefs) == omp.n_nonzero_coefs_
 
         current_node = Node(f"Block_{block_size}_{from_dim0}_{from_dim1}", parent=parent)
 
-        if norm_0_coefs > self.min_sparcity and block_size > self.min_n:
+        if norm_0_coefs > Utility.min_sparcity(self.min_sparcity, block_size) and block_size > self.min_n:
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
                 channel_processed_blocks, x_list = self.omp_code_recursive(
                     int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k,
