@@ -5,19 +5,22 @@ from utility import Utility
 from PIL import Image
 
 class ImageCompressor:
-    def __init__(self, min_sparcity, min_n, max_n, a_cols, max_error, wavelet_election = 'db1', shuffle_dictionary = False):
+    def __init__(self, min_sparcity, min_n, max_n, a_cols, max_error,
+                 wavelet_election = 'db1', shuffle_dictionary = False,
+                 v_format_precision = "f"
+                 ):
         #Algorithm Parameters 
         self.min_n = min_n
         self.max_n = max_n
         self.a_cols = a_cols
         self.min_sparcity = min_sparcity
         self.max_error = max_error
+        self.v_format_precision = v_format_precision
         
-        #File Format parameters (No son más argumentos de la clase)
+        # Other File Format parameters (No son más argumentos de la clase)
         self.fif_version = 2
         self.magic_number = b'FIF' # Ensure this is a bytes object
         self.header_format = '3sBiiBBBBB'
-        self.v_format_precision = "f" 
         
         self.omp_handler = OMPHandler(self.min_n, self.max_n, self.a_cols, self.min_sparcity, self.max_error)
         self.omp_handler.initialize_dictionary(
