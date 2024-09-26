@@ -59,7 +59,7 @@ class ImageCompressor:
             n = self.max_n
             x_list = []
             for k in range(depth):
-                channel_processed_blocks, x_list = self.omp_handler.omp_code(
+                channel_processed_blocks, x_list = self.omp_handler.omp_encode(
                                                     x_list = x_list,
                                                     image_data = image_data[:, :, k],
                                                     max_error = self.max_error,

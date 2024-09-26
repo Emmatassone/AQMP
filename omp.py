@@ -37,20 +37,20 @@ class OMPHandler:
             self.omp_dict[n_aux] = A
             n_aux *= 2
 
-    def omp_code(self, x_list, image_data, max_error, block_size, k):
+    def omp_encode(self, x_list, image_data, max_error, block_size, k):
         """Process channel of image using Matching Pursuit and track subdivisions."""
         channel_processed_blocks = 0
         self.subdivision_tree = Node("root")  
         
         for i in range(image_data.shape[0] // block_size):
             for j in range(image_data.shape[1] // block_size):
-                channel_processed_blocks, x_list = self.omp_code_recursive(
+                channel_processed_blocks, x_list = self.omp_encode_recursive(
                     block_size, i*block_size, j*block_size, k, image_data, max_error,
                     x_list, channel_processed_blocks, parent=self.subdivision_tree
                 )
         return channel_processed_blocks, x_list
 
-    def omp_code_recursive(self, block_size, from_dim0, from_dim1, k, image_data, max_error, x_list, channel_processed_blocks, parent):
+    def omp_encode_recursive(self, block_size, from_dim0, from_dim1, k, image_data, max_error, x_list, channel_processed_blocks, parent):
         """Recursive OMP code with tree-based subdivision tracking."""
         sub_image_data = Utility.sub_image(image_data, block_size, from_dim0, from_dim1)
         sub_image_data = sub_image_data.flatten()
@@ -75,7 +75,7 @@ class OMPHandler:
 
         if norm_0_coefs > Utility.min_sparcity(self.min_sparcity, block_size) and block_size > self.min_n:
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
-                channel_processed_blocks, x_list = self.omp_code_recursive(
+                channel_processed_blocks, x_list = self.omp_encode_recursive(
                     int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k,
                     image_data, max_error, x_list, channel_processed_blocks, parent=current_node
                 )
