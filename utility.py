@@ -1,6 +1,10 @@
 import numpy as np
 
 class Utility:
+    """
+    Utility class for image processing and numerical operations
+    """
+
     @staticmethod
     def truncate(value, format_spec):
         """Truncate the value to the specified format."""

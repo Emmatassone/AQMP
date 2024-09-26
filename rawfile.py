@@ -3,6 +3,10 @@ from utility import Utility
 from struct import pack, unpack, calcsize
 
 class RawFile:
+    """
+    Class for reading and writing operations on a file
+    """
+    
     def __init__(self, name, mode):
         """Open file with name and mode"""
         self.file = open(name, mode)

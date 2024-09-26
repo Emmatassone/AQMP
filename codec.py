@@ -5,6 +5,10 @@ from utility import Utility
 from PIL import Image
 
 class ImageCompressor:
+    """
+    Class for compressing and decompressing images
+    """
+
     def __init__(self, min_sparcity, min_n, max_n, a_cols, max_error,
                  wavelet_election = 'db1', shuffle_dictionary = False,
                  v_format_precision = "f"

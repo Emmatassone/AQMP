@@ -5,6 +5,11 @@ from basis import BasisFunctions
 from anytree import Node, RenderTree, PreOrderIter
 
 class OMPHandler:
+    """
+    Manage encoding and decoding using Orthogonal Matching Pursuit (OMP) and Adaptive Quadtrees (AQ).
+    Functions to visualize the tree structure obtained with AQ.
+    """
+
     def __init__(self, min_n, max_n, a_cols, min_sparcity, max_error):
         self.min_n = min_n
         self.max_n = max_n
