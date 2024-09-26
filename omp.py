@@ -2,12 +2,8 @@ import numpy as np
 from sklearn.linear_model import OrthogonalMatchingPursuit
 from utility import Utility
 from basis import BasisFunctions
-
-import numpy as np
-from sklearn.linear_model import OrthogonalMatchingPursuit
-from utility import Utility
-from basis import BasisFunctions
 from anytree import Node, RenderTree, PreOrderIter
+
 class OMPHandler:
     def __init__(self, min_n, max_n, a_cols, min_sparcity, max_error):
         self.min_n = min_n
