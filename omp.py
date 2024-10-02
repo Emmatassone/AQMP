@@ -4,6 +4,7 @@ from utility import Utility
 from basis import BasisFunctions
 from anytree import Node, RenderTree, PreOrderIter
 
+
 class OMPHandler:
     """
     Manage encoding and decoding using Orthogonal Matching Pursuit (OMP) and Adaptive Quadtrees (AQ).
@@ -70,8 +71,8 @@ class OMPHandler:
         omp.fit(dict_, sub_image_data)
         coefs = omp.coef_
         norm_0_coefs = np.linalg.norm(coefs, 0) # n_nonzero_coefs_ de sklearn
-        print("norm_0_coefs using linalg:", norm_0_coefs)
-        print("n_nonzero_coefs_ with scikit:", omp.n_nonzero_coefs_)
+        #print("norm_0_coefs using linalg:", norm_0_coefs)
+        #print("n_nonzero_coefs_ with scikit:", omp.n_nonzero_coefs_)
         #print("coefs:", coefs, coefs.shape)
 
         #assert int(norm_0_coefs) == omp.n_nonzero_coefs_

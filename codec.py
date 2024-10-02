@@ -3,15 +3,18 @@ from rawfile import RawFile
 from omp import OMPHandler
 from utility import Utility
 from PIL import Image
+import zlib # to apply DEFLATE
+
 
 class ImageCompressor:
     """
     Class for compressing and decompressing images
     """
+    # Codec nuevo nombre para la clase?
 
     def __init__(self, min_sparcity, min_n, max_n, a_cols, max_error,
                  wavelet_election = 'db1', shuffle_dictionary = False,
-                 v_format_precision = "f"
+                 v_format_precision = "f", apply_deflate = False
                  ):
         #Algorithm Parameters 
         self.min_n = min_n
@@ -20,6 +23,7 @@ class ImageCompressor:
         self.min_sparcity = min_sparcity
         self.max_error = max_error
         self.v_format_precision = v_format_precision
+        self.apply_deflate = apply_deflate
         
         # Other File Format parameters (No son más argumentos de la clase)
         self.fif_version = 2
@@ -88,13 +92,39 @@ class ImageCompressor:
             file.write("I", self.processed_blocks)
 
             bytes_written = file.tell()
-
-        print(f"bytes_written: {bytes_written}")
         print(f"processed_blocks: {self.processed_blocks}")
+        print(f"bytes_written (without DEFLATE): {bytes_written}")
+
+        if self.apply_deflate == True:
+            ## apply DEFLATE compression
+            with open(output_file, 'rb') as file:
+                compress = zlib.compressobj(9, zlib.DEFLATED, 15, 9, zlib.Z_DEFAULT_STRATEGY) # ver estos parametros
+                zdata = compress.compress(file.read())
+                zdata += compress.flush()
+
+            with open(output_file, 'wb') as file:
+                file.write(zdata)
+                print(f"DEFLATE applied. Bytes to write: {file.tell()}")
+
+        print("File saved.")
+	
 
     def decode(self, input_file, output_file):
         """Decompress input_file into output_file"""
-        with RawFile(input_file, 'rb') as file:
+
+        if self.apply_deflate == True:
+            # se descomprime el archivo al que se le aplicó DEFLATE
+            with open(input_file, 'rb') as file:
+                decompress = zlib.decompressobj(15) # 15 is the window size (must match the compress settings)
+                decompressed_data = decompress.decompress(file.read())
+                decompressed_data += decompress.flush()
+
+            new_file = input_file + "_after_deflate" 
+            with open(new_file, 'wb') as file:
+                file.write(decompressed_data)
+            input_file = new_file
+
+        with RawFile(input_file, 'rb') as file: 
             file.seek(-4, 2)
             processed_blocks = file.read("I")
             file.seek(0)

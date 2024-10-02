@@ -6,10 +6,12 @@ class RawFile:
     """
     Class for reading and writing operations on a file
     """
-    
+    # FileHandler nuevo nombre para la clase? filehandler.py nuevo nombre para el archivo?
+
     def __init__(self, name, mode):
         """Open file with name and mode"""
         self.file = open(name, mode)
+        # recordar depurar los *nibble si no los usamos
         self.wnibble = None     # nibble pending to write
         self.rnibble = None     # nibble pending to read
         self.queue = []         # other data pending to write
