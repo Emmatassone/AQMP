@@ -80,8 +80,9 @@ class OMPHandler:
 
         current_node = Node(f"Block_{block_size}_{from_dim0}_{from_dim1}", parent=parent)
 
-        min_sparcity_rate = self.min_sparcity
-        if norm_0_coefs > Utility.min_sparcity(min_sparcity_rate, block_size) and block_size > self.min_n:
+        
+        min_sparcity =  Utility.min_sparcity(self.min_sparcity, block_size)
+        if norm_0_coefs > min_sparcity and block_size > self.min_n:
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
                 channel_processed_blocks, x_list = self.omp_encode_recursive(
                     int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k,
