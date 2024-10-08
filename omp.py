@@ -4,6 +4,7 @@ from utility import Utility
 from basis import BasisFunctions
 from anytree import Node, RenderTree, PreOrderIter
 
+# omphandler.py nuevo nombre para el archivo?
 
 class OMPHandler:
     """
@@ -79,7 +80,8 @@ class OMPHandler:
 
         current_node = Node(f"Block_{block_size}_{from_dim0}_{from_dim1}", parent=parent)
 
-        if norm_0_coefs > Utility.min_sparcity(self.min_sparcity, block_size) and block_size > self.min_n:
+        min_sparcity_rate = self.min_sparcity
+        if norm_0_coefs > Utility.min_sparcity(min_sparcity_rate, block_size) and block_size > self.min_n:
             for x_init, y_init in [(x, y) for x in [0, int(block_size / 2)] for y in [0, int(block_size / 2)]]:
                 channel_processed_blocks, x_list = self.omp_encode_recursive(
                     int(block_size / 2), from_dim0 + x_init, from_dim1 + y_init, k,
@@ -107,9 +109,9 @@ class OMPHandler:
             image_data[i:i+n, j:j+n, k] = output_vector.reshape((n, n))
         return image_data
 
-################################################
-# New functions to visualize the tree structure#
-################################################
+#################################################
+# New functions to visualize the tree structure #
+#################################################
 
     def print_subdivision_tree(self):
         """Helper function to print the subdivision tree."""

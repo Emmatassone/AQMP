@@ -5,12 +5,12 @@ from utility import Utility
 from PIL import Image
 import zlib # to apply DEFLATE
 
+# Codec nuevo nombre para la clase?
 
 class ImageCompressor:
     """
     Class for compressing and decompressing images
     """
-    # Codec nuevo nombre para la clase?
 
     def __init__(self, min_sparcity, min_n, max_n, a_cols, max_error,
                  wavelet_election = 'db1', shuffle_dictionary = False,

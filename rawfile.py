@@ -2,11 +2,12 @@ import numpy as np
 from utility import Utility
 from struct import pack, unpack, calcsize
 
+# FileHandler nuevo nombre para la clase? filehandler.py nuevo nombre para el archivo?
+
 class RawFile:
     """
     Class for reading and writing operations on a file
     """
-    # FileHandler nuevo nombre para la clase? filehandler.py nuevo nombre para el archivo?
 
     def __init__(self, name, mode):
         """Open file with name and mode"""
