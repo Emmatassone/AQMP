@@ -4,6 +4,7 @@ from struct import pack, unpack, calcsize
 
 # FileHandler nuevo nombre para la clase? filehandler.py nuevo nombre para el archivo?
 
+
 class RawFile:
     """
     Class for reading and writing operations on a file
@@ -13,9 +14,9 @@ class RawFile:
         """Open file with name and mode"""
         self.file = open(name, mode)
         # recordar depurar los *nibble si no los usamos
-        self.wnibble = None     # nibble pending to write
-        self.rnibble = None     # nibble pending to read
-        self.queue = []         # other data pending to write
+        self.wnibble = None  # nibble pending to write
+        self.rnibble = None  # nibble pending to read
+        self.queue = []  # other data pending to write
 
     def __enter__(self):
         """Enter the runtime context related to this object."""
@@ -29,8 +30,10 @@ class RawFile:
         """Pack and write args with format fmt"""
         if fmt != "n":
             if self.wnibble is None:
-                fmt = "!" + fmt  # big-endian. handle binary data in a platform-independent way
-                args = [a.encode('utf-8') if isinstance(a, str) else a for a in args]
+                fmt = (
+                    "!" + fmt
+                )  # big-endian. handle binary data in a platform-independent way
+                args = [a.encode("utf-8") if isinstance(a, str) else a for a in args]
                 self.file.write(pack(fmt, *args))
             else:
                 self.queue.append((fmt, args))
@@ -44,7 +47,11 @@ class RawFile:
             size = calcsize(fmt)
             data = self.file.read(size)
             udata = unpack(fmt, data)
-            return [u.decode('utf-8') if isinstance(u, bytes) else u for u in udata] if len(udata) > 1 else udata[0]
+            return (
+                [u.decode("utf-8") if isinstance(u, bytes) else u for u in udata]
+                if len(udata) > 1
+                else udata[0]
+            )
         else:
             raise ValueError("fmt = n. Not implemented.")
 
@@ -67,7 +74,7 @@ class RawFile:
         self.write(header_format, *args)
 
     def write_vector(self, x, x_norm_0, v_format):
-        """ Write a sparse vector as a list of pairs (pos, value)"""
+        """Write a sparse vector as a list of pairs (pos, value)"""
         self.write("B", int(x_norm_0))
         position_format = "B" if len(x) <= 256 else "H"
         if x_norm_0 > 0:

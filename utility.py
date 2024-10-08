@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class Utility:
     """
     Utility class for image processing and numerical operations
@@ -11,7 +12,9 @@ class Utility:
         try:
             return float(f"{value:{format_spec}}")
         except ValueError as error:
-            raise ValueError(f"Invalid format code '{format_spec}' for value '{value}'") from error
+            raise ValueError(
+                f"Invalid format code '{format_spec}' for value '{value}'"
+            ) from error
 
     @staticmethod
     def quantize(array, v_format):
@@ -23,13 +26,13 @@ class Utility:
     @staticmethod
     def mode_to_bpp(mode):
         """Convert image mode to bits per pixel."""
-        if mode == 'L':
+        if mode == "L":
             return 8
-        elif mode == 'RGB':
+        elif mode == "RGB":
             return 24
-        elif mode == 'RGBA':
+        elif mode == "RGBA":
             return 32
-        elif mode == 'YCbCr':
+        elif mode == "YCbCr":
             return 24
         else:
             raise ValueError(f"Unsupported image mode: {mode}")
@@ -38,7 +41,7 @@ class Utility:
     def min_sparcity(min_sparcity_rate, n):
         """Calculate minimum sparsity based on max_error and block size n."""
         return min_sparcity_rate * n**2
-    
+
     @staticmethod
     def sub_image(image_data, n, i, j, k=None):
         """Extract a sub-image from the larger image array."""
@@ -72,4 +75,3 @@ class Utility:
         image_data[:, :, 2] = np.clip(B, 0, 255)
 
         return image_data
-    
