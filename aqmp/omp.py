@@ -1,9 +1,9 @@
 import numpy as np
 from sklearn.linear_model import OrthogonalMatchingPursuit
-from utility import Utility
-from basis import BasisFunctions
+from .utility import Utility
+from .basis import BasisFunctions
 from anytree import Node, RenderTree, PreOrderIter
-
+import warnings
 # omphandler.py nuevo nombre para el archivo?
 
 
@@ -85,9 +85,13 @@ class OMPHandler:
         # n_nonzero_coefs = int(dict_.shape[1])
         # print("hyperparameter n_nonzero_coefs:", n_nonzero_coefs)
         omp = OrthogonalMatchingPursuit(
-            tol=self.max_error, fit_intercept=False
-        )  # min(dict_.shape[1], image_data.size)
-        omp.fit(dict_, sub_image_data)
+            tol=self.max_error,
+            fit_intercept=False,
+        )  
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            omp.fit(dict_, sub_image_data)  
+        
         coefs = omp.coef_
         norm_0_coefs = np.linalg.norm(coefs, 0)  # n_nonzero_coefs_ de sklearn
         # print("norm_0_coefs using linalg:", norm_0_coefs)

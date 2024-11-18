@@ -1,0 +1,1 @@
+from .aqmp import ImageCompressor

@@ -1,7 +1,7 @@
 import numpy as np
-from rawfile import RawFile
-from omp import OMPHandler
-from utility import Utility
+from .rawfile import RawFile
+from .omp import OMPHandler
+from .utility import Utility
 from PIL import Image
 import zlib  # to apply DEFLATE
 

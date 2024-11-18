@@ -1,5 +1,5 @@
 import numpy as np
-from utility import Utility
+from .utility import Utility
 from struct import pack, unpack, calcsize
 
 # FileHandler nuevo nombre para la clase? filehandler.py nuevo nombre para el archivo?
