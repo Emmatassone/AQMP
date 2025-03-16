@@ -71,7 +71,7 @@ This example demonstrates how to compress and decompress an image using the Imag
 - [x] Implement DEFLATE function from zlib to see check if there are changes in the SSIM index.
 - [ ] Extend to video compressive sensing (2nd paper?) [https://www.mdpi.com/2076-3417/12/5/2734]
 
-# Encoder Diagram (example with 8x8 image):
+# Encoder Diagram (example with 16x16 image):
 
 ![Algorithm Example](./images/flow_diagram.png)
 
