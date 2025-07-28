@@ -5,7 +5,6 @@ dist/
 build/
 compressions
 notebooks/*.png
-images/results/*.png
 
 .DS_Store
 .virtual_documents/
