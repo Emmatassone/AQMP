@@ -51,12 +51,14 @@ class ImageCompressor:
         """Compress input_file with the given parameters into output_file"""
 
         image = Image.open(input_file)
+        print(f'image size: {image.size}')
         image = image.convert("YCbCr")  # por que esta eleccion en lugar de RGB?
         w, h = image.size
         depth = Utility.mode_to_bpp(image.mode) // 8
         self.image_rawsize = w * h * depth  # no usado hasta ahora
         self.processed_blocks = 0
         self.non_zero_coefs = 0
+        print(depth)
 
         with RawFile(output_file, "wb") as file:
 
@@ -103,8 +105,8 @@ class ImageCompressor:
             file.write("I", self.processed_blocks)
 
             bytes_written = file.tell()
-        print(f"processed_blocks: {self.processed_blocks}")
-        print(f"bytes_written (without DEFLATE): {bytes_written}")
+        #print(f"processed_blocks: {self.processed_blocks}")
+        #print(f"bytes_written (without DEFLATE): {bytes_written}")
 
         if self.apply_deflate == True:
             ## apply DEFLATE compression
@@ -117,9 +119,9 @@ class ImageCompressor:
 
             with open(output_file, "wb") as file:
                 file.write(zdata)
-                print(f"DEFLATE applied. Bytes to write: {file.tell()}")
+                #print(f"DEFLATE applied. Bytes to write: {file.tell()}")
 
-        print("File saved.")
+        #print("File saved.")
 
     def decode(self, input_file, output_file):
         """Decompress input_file into output_file"""
@@ -172,4 +174,4 @@ class ImageCompressor:
             image_data = Utility.ycbcr_to_rgb(image_data)
             image = Image.fromarray(image_data.astype("uint8"))
             image.save(output_file)
-            print("Output file saved to: " + output_file)
+            #print("Output file saved to: " + output_file)
